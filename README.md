@@ -103,9 +103,25 @@ Edit `includes/config.php`, or set these environment variables:
 | `GF_DB_NAME` | `godsforum` | Database name |
 | `GF_DB_USER` | `root` | Database user |
 | `GF_DB_PASS` | *(empty)* | Database password |
-| `GF_BASE_URL` | *(empty)* | Subfolder path, e.g. `/godsforum`, no trailing slash |
+| `GF_BASE_URL` | *(auto-detected)* | Override the install path only if detection cannot work, e.g. behind a proxy |
 | `GF_HTTPS` | `false` | Set true to mark session cookies `Secure` |
 | `GF_DEBUG` | `false` | Show PHP errors on screen. Keep off in production |
+
+#### Installing in a subfolder
+
+Nothing needs to be configured. The install path is detected at runtime, so
+the same files work unchanged whether you drop them at the document root or
+inside any folder, under any name:
+
+| URL you open | Detected `BASE_URL` | Stylesheet resolves to |
+| --- | --- | --- |
+| `http://localhost/` | `''` | `/assets/css/style.css` |
+| `http://localhost/fulldesign-arena-01a0708a-fulldesign/` | `/fulldesign-arena-01a0708a-fulldesign` | `/fulldesign-arena-01a0708a-fulldesign/assets/css/style.css` |
+| `http://localhost/forums/godsforum/` | `/forums/godsforum` | `/forums/godsforum/assets/css/style.css` |
+
+Every link, form action, redirect, image and the session cookie path are all
+built from `BASE_URL`, so renaming or moving the folder needs no code change.
+`.htaccess` is written with relative rules for the same reason.
 
 ### 4. Make uploads writable
 

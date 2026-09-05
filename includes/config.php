@@ -25,10 +25,70 @@ define('SITE_NAME', 'GodsForum');
 define('SITE_TAGLINE', 'A meeting hall for mortals with opinions');
 
 /**
- * Base URL path of the installation, WITHOUT trailing slash.
- * Use '' when the forum lives at the domain root, or '/godsforum' in a subfolder.
+ * Work out the URL path the forum is installed under.
+ *
+ * The project root is the folder holding index.php, one level above this file.
+ * The currently running script always lives inside it, so removing the script's
+ * path relative to the project root from SCRIPT_NAME leaves the base path.
  */
-define('BASE_URL', rtrim(getenv('GF_BASE_URL') ?: '', '/'));
+function gf_detect_base_url(): string
+{
+    // 1. An explicit override always wins.
+    $configured = getenv('GF_BASE_URL');
+    if (is_string($configured) && $configured !== '') {
+        return $configured === '/' ? '' : '/' . trim(str_replace('\\', '/', $configured), '/');
+    }
+
+    $scriptName = $_SERVER['SCRIPT_NAME'] ?? '';
+    $scriptFile = $_SERVER['SCRIPT_FILENAME'] ?? '';
+
+    if (!is_string($scriptName) || $scriptName === '' || !is_string($scriptFile) || $scriptFile === '') {
+        return '';
+    }
+
+    $normalise = static fn (string $path): string => rtrim(str_replace('\\', '/', $path), '/');
+
+    $projectRoot = $normalise((string) (realpath(dirname(__DIR__)) ?: dirname(__DIR__)));
+    $scriptPath  = $normalise((string) (realpath($scriptFile) ?: $scriptFile));
+    $scriptName  = str_replace('\\', '/', $scriptName);
+
+    // 2. Preferred route: strip the script's path inside the project from SCRIPT_NAME.
+    if ($projectRoot !== '' && str_starts_with($scriptPath, $projectRoot . '/')) {
+        $relative = substr($scriptPath, strlen($projectRoot));      // e.g. /admin/index.php
+        if ($relative !== '' && str_ends_with($scriptName, $relative)) {
+            return rtrim(substr($scriptName, 0, -strlen($relative)), '/');
+        }
+    }
+
+    // 3. Fallback for setups where the paths cannot be compared (symlinks, odd
+    //    SAPIs): assume this file sits one level below the project root.
+    $base = rtrim(str_replace('\\', '/', dirname($scriptName)), '/');
+
+    // Scripts inside /admin are one directory deeper than the project root.
+    if (str_ends_with($base, '/admin')) {
+        $base = substr($base, 0, -strlen('/admin'));
+    }
+
+    return $base === '/' ? '' : $base;
+}
+
+/**
+ * Base URL path of the installation, WITHOUT a trailing slash.
+ *
+ * You normally do not need to touch this. It is detected automatically, so the
+ * forum works unchanged at the domain root:
+ *
+ *     http://localhost/                       ->  BASE_URL = ''
+ *
+ * and inside any subfolder, whatever that folder happens to be called:
+ *
+ *     http://localhost/fulldesign/            ->  BASE_URL = '/fulldesign'
+ *     http://localhost/forums/godsforum/      ->  BASE_URL = '/forums/godsforum'
+ *
+ * Set the GF_BASE_URL environment variable to override the detection, for
+ * example when the forum sits behind a reverse proxy on a different path.
+ */
+define('BASE_URL', gf_detect_base_url());
 
 define('POSTS_PER_PAGE', 10);
 define('TOPICS_PER_PAGE', 20);

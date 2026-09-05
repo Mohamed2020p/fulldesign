@@ -80,7 +80,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 ((int) db_value('SELECT COUNT(*) FROM posts WHERE topic_id = :t', ['t' => (int) $topic['id']], 1))
                 / POSTS_PER_PAGE
             ));
-            redirect(ltrim(topic_url((int) $topic['id'], (string) $topic['title'], $lastPage), '/') . '#bottom');
+            redirect(topic_url((int) $topic['id'], (string) $topic['title'], $lastPage) . '#bottom');
         }
     }
 }

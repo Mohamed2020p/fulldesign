@@ -93,10 +93,40 @@ function url(string $path = ''): string
     return BASE_URL . '/' . ltrim($path, '/');
 }
 
+/**
+ * Send a Location header and stop.
+ *
+ * Accepts an absolute URL, a path already containing BASE_URL (as returned by
+ * url() or topic_url()), or a plain path such as 'login.php'. The base path is
+ * never applied twice, so passing a value straight from url() is safe.
+ */
 function redirect(string $path): never
 {
-    header('Location: ' . (str_starts_with($path, 'http') ? $path : url($path)));
+    header('Location: ' . absolute_path($path));
     exit;
+}
+
+/**
+ * Turn any of the accepted path forms into one rooted at the install folder.
+ */
+function absolute_path(string $path): string
+{
+    // Full URLs are handed back untouched.
+    if (preg_match('#^https?://#i', $path) === 1) {
+        return $path;
+    }
+
+    // Already prefixed with the install folder, for example from url().
+    if (BASE_URL !== '' && ($path === BASE_URL || str_starts_with($path, BASE_URL . '/'))) {
+        return $path;
+    }
+
+    // At the domain root a leading slash already means the right thing.
+    if (BASE_URL === '' && str_starts_with($path, '/')) {
+        return $path;
+    }
+
+    return url($path);
 }
 
 // ---------------------------------------------------------------------------

@@ -1,20 +1,54 @@
 # ---------------------------------------------------------------------------
 # GodsForum - Apache configuration
+#
+# This file is location independent. It works exactly the same whether the
+# forum is served from the domain root:
+#
+#     http://localhost/
+#
+# or from any subfolder, whatever that folder is named:
+#
+#     http://localhost/fulldesign-arena-01a0708a-fulldesign/
+#     http://localhost/godsforum/
+#
+# Nothing below hard codes a path, so you never have to edit it after moving
+# or renaming the installation directory.
 # ---------------------------------------------------------------------------
 
 Options -Indexes
 
 DirectoryIndex index.php index.html
 
+# Make sure Apache is allowed to read the .htaccess rules in subfolders.
+# AllowOverride All must be set for this directory in the server config.
+
 # --- Protect sensitive files -----------------------------------------------
-<FilesMatch "^(\.env|\.gitignore|composer\.(json|lock)|package(-lock)?\.json|tailwind\.config\.js|.*\.sql|.*\.md|lint-php\.cjs)$">
+# FilesMatch is evaluated per file name, not per URL path, so it keeps working
+# no matter which folder the forum lives in.
+<FilesMatch "^(\.env|\.htaccess|\.htmlvalidate\.json|\.stylelintrc\.json|\.gitignore|composer\.(json|lock)|package(-lock)?\.json|tailwind\.config\.js|lint-php\.cjs|.*\.sql|.*\.md)$">
     Require all denied
 </FilesMatch>
 
-RedirectMatch 403 ^/includes/.*$
-RedirectMatch 403 ^/database/.*$
-RedirectMatch 403 ^/assets/src/.*$
-RedirectMatch 403 ^/node_modules/.*$
+# --- Protect private directories -------------------------------------------
+# RewriteRule patterns are relative to this directory when RewriteBase is not
+# set, so these block includes/, database/, assets/src/ and node_modules/
+# regardless of the installation path.
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+
+    RewriteRule ^includes/     - [F,L]
+    RewriteRule ^database/     - [F,L]
+    RewriteRule ^assets/src/   - [F,L]
+    RewriteRule ^node_modules/ - [F,L]
+</IfModule>
+
+# Fallback for servers without mod_rewrite: deny the PHP and SQL files that
+# must never be requested directly.
+<IfModule !mod_rewrite.c>
+    <FilesMatch "^(config|db|functions|header|footer|layout)\.php$">
+        Require all denied
+    </FilesMatch>
+</IfModule>
 
 # --- Security headers -------------------------------------------------------
 <IfModule mod_headers.c>
@@ -28,10 +62,11 @@ RedirectMatch 403 ^/node_modules/.*$
 # --- Static asset caching ---------------------------------------------------
 <IfModule mod_expires.c>
     ExpiresActive On
-    ExpiresByType text/css              "access plus 7 days"
-    ExpiresByType image/png             "access plus 30 days"
-    ExpiresByType image/jpeg            "access plus 30 days"
-    ExpiresByType image/webp            "access plus 30 days"
+    ExpiresByType text/css   "access plus 7 days"
+    ExpiresByType image/png  "access plus 30 days"
+    ExpiresByType image/jpeg "access plus 30 days"
+    ExpiresByType image/webp "access plus 30 days"
+    ExpiresByType image/gif  "access plus 30 days"
 </IfModule>
 
 # --- Compression ------------------------------------------------------------
@@ -39,6 +74,8 @@ RedirectMatch 403 ^/node_modules/.*$
     AddOutputFilterByType DEFLATE text/html text/css text/plain application/javascript
 </IfModule>
 
-# --- Friendly error pages ---------------------------------------------------
-ErrorDocument 403 /index.php
-ErrorDocument 404 /index.php
+# --- Correct MIME type for the stylesheet -----------------------------------
+# Some shared hosts serve .css as text/plain, which browsers then ignore.
+<IfModule mod_mime.c>
+    AddType text/css .css
+</IfModule>

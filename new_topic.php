@@ -88,7 +88,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         recount_user_posts((int) $user['id']);
 
         flash('success', 'Your topic has been created.');
-        redirect(ltrim(topic_url($topicId, $title), '/'));
+        redirect(topic_url($topicId, $title));
     }
 }
 

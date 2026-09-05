@@ -42,7 +42,7 @@ if (!$isOwner && !is_admin()) {
 $locked = ((int) $post['is_locked'] === 1 || (int) $post['board_locked'] === 1) && !is_admin();
 if ($locked) {
     flash('error', 'That topic is locked, its posts cannot be edited.');
-    redirect(ltrim(topic_url((int) $post['topic_id'], (string) $post['topic_title']), '/'));
+    redirect(topic_url((int) $post['topic_id'], (string) $post['topic_title']));
 }
 
 $errors = [];
@@ -69,7 +69,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         }
 
         flash('success', 'The post has been updated.');
-        redirect(ltrim(topic_url((int) $post['topic_id'], (string) $post['topic_title']), '/') . '#post-' . $postId);
+        redirect(topic_url((int) $post['topic_id'], (string) $post['topic_title']) . '#post-' . $postId);
     }
 }
 

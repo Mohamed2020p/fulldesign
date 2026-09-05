@@ -58,7 +58,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         );
 
         flash('success', 'Thank you. The staff have been notified.');
-        redirect(ltrim(topic_url((int) $post['topic_id'], (string) $post['topic_title']), '/') . '#post-' . $postId);
+        redirect(topic_url((int) $post['topic_id'], (string) $post['topic_title']) . '#post-' . $postId);
     }
 }
 
