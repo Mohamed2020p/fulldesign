@@ -8,34 +8,50 @@
 #
 # or from any subfolder, whatever that folder is named:
 #
-#     http://localhost/fulldesign-arena-01a0708a-fulldesign/
 #     http://localhost/godsforum/
+#     http://localhost/forums/godsforum/
 #
 # Nothing below hard codes a path, so you never have to edit it after moving
 # or renaming the installation directory.
+#
+# Every version-specific directive is wrapped in an <IfModule> test, because
+# an unrecognised directive in a .htaccess file is a fatal error and Apache
+# answers the request with HTTP 500 before PHP is ever reached.
 # ---------------------------------------------------------------------------
 
 Options -Indexes
 
-DirectoryIndex router.php
+DirectoryIndex router.php index.php
 
-# Make sure Apache is allowed to read the .htaccess rules in subfolders.
-# AllowOverride All must be set for this directory in the server config.
+# Make sure Apache is allowed to read the .htaccess rules in this directory.
+# AllowOverride All must be set for it in the server configuration.
 
 # --- Protect sensitive files -----------------------------------------------
 # FilesMatch is evaluated per file name, not per URL path, so it keeps working
 # no matter which folder the forum lives in.
+#
+# The access syntax changed between Apache 2.2 and 2.4. Both spellings are
+# given, each guarded by a version test, so this file loads on either one.
 <FilesMatch "^(\.env|\.htaccess|\.htmlvalidate\.json|\.stylelintrc\.json|\.gitignore|composer\.(json|lock)|package(-lock)?\.json|tailwind\.config\.js|lint-php\.cjs|.*\.sql|.*\.md)$">
-    Require all denied
+    <IfModule mod_authz_core.c>
+        Require all denied
+    </IfModule>
+    <IfModule !mod_authz_core.c>
+        Order allow,deny
+        Deny from all
+    </IfModule>
 </FilesMatch>
 
-# --- Protect private directories -------------------------------------------
-# RewriteRule patterns are relative to this directory when RewriteBase is not
-# set, so these block includes/, database/, assets/src/ and node_modules/
-# regardless of the installation path.
+# --- Rewriting --------------------------------------------------------------
 <IfModule mod_rewrite.c>
     RewriteEngine On
 
+    # RewriteBase is deliberately NOT set. Left unset, Apache infers the base
+    # from the directory this file sits in, which is what makes the same file
+    # work at the document root and in a subfolder of any name. Hard coding
+    # "RewriteBase /" here would break every subfolder install.
+
+    # Private directories are never reachable over HTTP.
     RewriteRule ^includes/     - [F,L]
     RewriteRule ^database/     - [F,L]
     RewriteRule ^pages/        - [F,L]
@@ -43,11 +59,16 @@ DirectoryIndex router.php
     RewriteRule ^node_modules/ - [F,L]
 
     # --- Clean URLs ---------------------------------------------------------
-    # Anything ending in .php is bounced to its readable address, so an old
-    # link or a hand typed extension never leaves a .php URL in the address
-    # bar and never produces two addresses for the same page.
-    RewriteCond %{THE_REQUEST} "\s/(.*?)(index)?\.php[\s?]" [NC]
-    RewriteRule ^ %1 [R=301,L,NE]
+    # A request that literally names a .php file is bounced to its readable
+    # address, so an old link or a hand typed extension never leaves a .php
+    # URL in the address bar and never gives one page two addresses.
+    #
+    # THE_REQUEST holds the raw request line, so it still shows the .php even
+    # after the internal rewrite below has run. The capture starts at the
+    # leading slash, so the target is an absolute path and the install folder
+    # is preserved on a subfolder install.
+    RewriteCond %{THE_REQUEST} "^[A-Z]+\s([^?\s]*?)(?:index)?\.php(?:[?\s]|$)" [NC]
+    RewriteRule ^ %1 [R=301,L,NE,QSA]
 
     # Real files and real directories are served as they are: the stylesheet,
     # the images and the uploaded avatars never touch the router.
@@ -59,11 +80,17 @@ DirectoryIndex router.php
     RewriteRule ^ router.php [L]
 </IfModule>
 
-# Fallback for servers without mod_rewrite: deny the PHP and SQL files that
-# must never be requested directly.
+# Fallback for servers without mod_rewrite: deny the PHP files that must
+# never be requested directly.
 <IfModule !mod_rewrite.c>
-    <FilesMatch "^(config|db|functions|header|footer|layout)\.php$">
-        Require all denied
+    <FilesMatch "^(config|db|functions|themes|header|footer|layout)\.php$">
+        <IfModule mod_authz_core.c>
+            Require all denied
+        </IfModule>
+        <IfModule !mod_authz_core.c>
+            Order allow,deny
+            Deny from all
+        </IfModule>
     </FilesMatch>
 </IfModule>
 
@@ -73,12 +100,15 @@ DirectoryIndex router.php
     Header always set X-Frame-Options "SAMEORIGIN"
     Header always set Referrer-Policy "strict-origin-when-cross-origin"
     Header always set Permissions-Policy "geolocation=(), microphone=(), camera=()"
-    # Sent only over TLS: a browser must ignore HSTS on plain HTTP, and
-    # sending it before the site is fully on HTTPS would lock visitors out.
-    <If "%{HTTPS} == 'on'">
-        Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
-    </If>
     Header always set Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self'; form-action 'self'; frame-ancestors 'self'; base-uri 'self'"
+
+    # HSTS is sent only over TLS: a browser must ignore it on plain HTTP, and
+    # announcing it before the site is fully on HTTPS locks visitors out.
+    #
+    # "Header ... env=HTTPS" is used rather than an <If> block, because <If>
+    # requires Apache 2.4 and is a fatal configuration error on 2.2. PHP also
+    # sends this header itself, so the policy holds either way.
+    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains" env=HTTPS
 </IfModule>
 
 # --- Static asset caching ---------------------------------------------------
