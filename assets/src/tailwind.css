@@ -1,0 +1,247 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* -------------------------------------------------------------------------
+   GodsForum - base layer
+   ------------------------------------------------------------------------- */
+@layer base {
+  html {
+    text-size-adjust: 100%;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    background-color: #f4ecdc;
+    background-image:
+      linear-gradient(rgb(217 203 175 / 35%) 1px, transparent 1px),
+      linear-gradient(90deg, rgb(217 203 175 / 22%) 1px, transparent 1px);
+    background-size: 100% 28px, 28px 100%;
+  }
+
+  h1, h2, h3, h4 {
+    font-weight: 600;
+    letter-spacing: 0.01em;
+  }
+
+  a {
+    text-underline-offset: 2px;
+  }
+
+  :focus-visible {
+    outline: 2px solid #8f2c2c;
+    outline-offset: 2px;
+  }
+
+  ::selection {
+    background-color: #c2a14d;
+    color: #142034;
+  }
+}
+
+/* -------------------------------------------------------------------------
+   GodsForum - components
+   ------------------------------------------------------------------------- */
+@layer components {
+  .skip-link {
+    position: absolute;
+    left: -9999px;
+    top: 0;
+    z-index: 60;
+    background-color: #c2a14d;
+    color: #142034;
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+
+  .skip-link:focus {
+    left: 0;
+  }
+
+  .panel {
+    border: 1px solid #d9cbaf;
+    background-color: #fbf6ec;
+    box-shadow: 0 1px 0 0 #d9cbaf, 0 2px 8px -6px rgb(28 43 69 / 35%);
+  }
+
+  .panel-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    border-bottom: 1px solid #d9cbaf;
+    background-color: #1c2b45;
+    padding: 0.625rem 1rem;
+    color: #f4ecdc;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
+  }
+
+  .panel-subhead {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    border-bottom: 1px solid #d9cbaf;
+    background-color: #eadfc8;
+    padding: 0.5rem 1rem;
+    color: #1c2b45;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.375rem;
+    border: 1px solid #1c2b45;
+    padding: 0.5rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    line-height: 1.25rem;
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  }
+
+  .btn-primary {
+    background-color: #1c2b45;
+    color: #f4ecdc;
+  }
+
+  .btn-primary:hover {
+    background-color: #142034;
+  }
+
+  .btn-gold {
+    border-color: #c2a14d;
+    background-color: #c2a14d;
+    color: #142034;
+  }
+
+  .btn-gold:hover {
+    background-color: transparent;
+    color: #8a6f26;
+  }
+
+  .btn-ghost {
+    background-color: transparent;
+    color: #1c2b45;
+  }
+
+  .btn-ghost:hover {
+    background-color: #eadfc8;
+  }
+
+  .btn-danger {
+    border-color: #8f2c2c;
+    background-color: transparent;
+    color: #8f2c2c;
+  }
+
+  .btn-danger:hover {
+    background-color: #8f2c2c;
+    color: #f4ecdc;
+  }
+
+  .btn-sm {
+    padding: 0.25rem 0.625rem;
+    font-size: 0.75rem;
+  }
+
+  .field-label {
+    display: block;
+    margin-bottom: 0.375rem;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    color: #1c2b45;
+  }
+
+  .field-input {
+    width: 100%;
+    border: 1px solid #d9cbaf;
+    background-color: #fff;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.9rem;
+    color: #1c2b45;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .field-input::placeholder {
+    color: #98a4b5;
+  }
+
+  .field-input:focus {
+    border-color: #1c2b45;
+    box-shadow: 0 0 0 3px rgb(194 161 77 / 28%);
+    outline: none;
+  }
+
+  .field-help {
+    margin-top: 0.375rem;
+    font-size: 0.75rem;
+    color: #5a6a80;
+  }
+
+  .tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    border: 1px solid #d9cbaf;
+    background-color: #eadfc8;
+    padding: 0.05rem 0.45rem;
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: #1c2b45;
+  }
+
+  .tag-gold {
+    border-color: #c2a14d;
+    background-color: rgb(194 161 77 / 20%);
+    color: #7d6420;
+  }
+
+  .tag-crimson {
+    border-color: #8f2c2c;
+    background-color: rgb(143 44 44 / 12%);
+    color: #8f2c2c;
+  }
+
+  .tag-forest {
+    border-color: #2f5d43;
+    background-color: rgb(47 93 67 / 12%);
+    color: #2f5d43;
+  }
+
+  .prose-post {
+    font-size: 0.95rem;
+    line-height: 1.7;
+    color: #23334d;
+  }
+
+  .prose-post p {
+    margin-bottom: 0.85rem;
+  }
+
+  .prose-post p:last-child {
+    margin-bottom: 0;
+  }
+
+  .row-link {
+    color: #1c2b45;
+    font-weight: 500;
+  }
+
+  .row-link:hover {
+    color: #8f2c2c;
+    text-decoration: underline;
+  }
+
+  .divide-rule > * + * {
+    border-top: 1px solid #d9cbaf;
+  }
+}

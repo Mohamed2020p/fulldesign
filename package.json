@@ -1,0 +1,32 @@
+{
+  "name": "godsforum",
+  "version": "1.0.0",
+  "private": true,
+  "description": "GodsForum - an old school PHP and MySQL message board with a Tailwind CSS front end.",
+  "scripts": {
+    "build": "tailwindcss -i assets/src/tailwind.css -o assets/css/style.css --minify",
+    "watch": "tailwindcss -i assets/src/tailwind.css -o assets/css/style.css --watch",
+    "lint:php": "node lint-php.cjs",
+    "lint:css": "stylelint \"assets/src/**/*.css\"",
+    "test": "npm run lint:php"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Mohamed2020p/fulldesign.git"
+  },
+  "keywords": [
+    "forum",
+    "php",
+    "mysql",
+    "tailwindcss"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "css-tree": "^3.2.1",
+    "html-validate": "^11.13.0",
+    "php-parser": "^3.2.1",
+    "stylelint": "^17.15.0",
+    "stylelint-config-standard": "^40.0.0",
+    "tailwindcss": "^3.4.17"
+  }
+}

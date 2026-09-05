@@ -1,0 +1,44 @@
+# ---------------------------------------------------------------------------
+# GodsForum - Apache configuration
+# ---------------------------------------------------------------------------
+
+Options -Indexes
+
+DirectoryIndex index.php index.html
+
+# --- Protect sensitive files -----------------------------------------------
+<FilesMatch "^(\.env|\.gitignore|composer\.(json|lock)|package(-lock)?\.json|tailwind\.config\.js|.*\.sql|.*\.md|lint-php\.cjs)$">
+    Require all denied
+</FilesMatch>
+
+RedirectMatch 403 ^/includes/.*$
+RedirectMatch 403 ^/database/.*$
+RedirectMatch 403 ^/assets/src/.*$
+RedirectMatch 403 ^/node_modules/.*$
+
+# --- Security headers -------------------------------------------------------
+<IfModule mod_headers.c>
+    Header always set X-Content-Type-Options "nosniff"
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+    Header always set Permissions-Policy "geolocation=(), microphone=(), camera=()"
+    Header always set Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self'; form-action 'self'; frame-ancestors 'self'; base-uri 'self'"
+</IfModule>
+
+# --- Static asset caching ---------------------------------------------------
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType text/css              "access plus 7 days"
+    ExpiresByType image/png             "access plus 30 days"
+    ExpiresByType image/jpeg            "access plus 30 days"
+    ExpiresByType image/webp            "access plus 30 days"
+</IfModule>
+
+# --- Compression ------------------------------------------------------------
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/css text/plain application/javascript
+</IfModule>
+
+# --- Friendly error pages ---------------------------------------------------
+ErrorDocument 403 /index.php
+ErrorDocument 404 /index.php

@@ -1,0 +1,22 @@
+# Dependencies
+/node_modules/
+
+# Uploaded member content (keep the folder, not the files)
+/uploads/avatars/*
+!/uploads/avatars/.gitkeep
+!/uploads/avatars/index.php
+
+# Local environment overrides
+.env
+/includes/config.local.php
+
+# Editor and OS noise
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# Build and test artefacts
+/tmp/
+*.log
