@@ -5,6 +5,13 @@
 
 declare(strict_types=1);
 
+// This page is a route target, not a public address. It is reached only
+// through the front controller, which has already resolved the request.
+if (!defined('GF_ROUTER')) {
+    http_response_code(404);
+    exit;
+}
+
 require_once __DIR__ . '/layout.php';
 
 $staff = require_admin();
@@ -40,7 +47,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         }
     }
 
-    redirect('admin/posts.php');
+    redirect(url('admin/posts'));
 }
 
 $search = mb_substr(param_string('q'), 0, 100);
@@ -59,8 +66,8 @@ $page       = min(max(1, param_int('page', 1)), $totalPages);
 $offset     = ($page - 1) * $perPage;
 
 $posts = db_all(
-    'SELECT p.id, p.body, p.created_at, p.ip_address,
-            t.id AS topic_id, t.title,
+    'SELECT p.id, p.ref, p.body, p.created_at, p.ip_address,
+            t.id AS topic_id, t.title, t.slug AS topic_slug,
             u.id AS user_id, u.username
        FROM posts p
        JOIN topics t ON t.id = p.topic_id
@@ -73,14 +80,14 @@ $posts = db_all(
 admin_header('Posts', 'Every message on the board, newest first.');
 ?>
 
-<form method="get" action="<?= e(url('admin/posts.php')) ?>" class="panel mb-5 flex flex-wrap items-end gap-3 p-4">
+<form method="get" action="<?= e(url('admin/posts')) ?>" class="panel mb-5 flex flex-wrap items-end gap-3 p-4">
     <div class="min-w-[16rem] flex-1">
         <label class="field-label" for="q">Search post text</label>
         <input class="field-input" type="search" id="q" name="q" maxlength="100" value="<?= e($search) ?>" placeholder="Any words">
     </div>
     <button type="submit" class="btn btn-primary">Search</button>
     <?php if ($search !== ''): ?>
-        <a class="btn btn-ghost" href="<?= e(url('admin/posts.php')) ?>">Clear</a>
+        <a class="btn btn-ghost" href="<?= e(url('admin/posts')) ?>">Clear</a>
     <?php endif; ?>
 </form>
 
@@ -88,12 +95,12 @@ admin_header('Posts', 'Every message on the board, newest first.');
     <?php foreach ($posts as $post): ?>
         <article class="px-4 py-3">
             <div class="flex flex-wrap items-baseline justify-between gap-2">
-                <a class="row-link text-sm" href="<?= e(topic_url((int) $post['topic_id'], (string) $post['title'])) ?>#post-<?= e((string) (int) $post['id']) ?>">
+                <a class="row-link text-sm" href="<?= e(topic_url((string) $post['topic_slug'])) ?>#post-<?= e((string) (int) $post['id']) ?>">
                     <?= e(excerpt((string) $post['title'], 70)) ?>
                 </a>
-                <span class="text-[11px] text-ink-soft">
+                <span class="text-[11px] text-soft">
                     <?php if ($post['user_id'] !== null): ?>
-                        <a class="hover:text-crimson hover:underline" href="<?= e(url('profile.php?id=' . (int) $post['user_id'])) ?>"><?= e((string) $post['username']) ?></a>
+                        <a class="hover:underline" href="<?= e(member_url((string) $post['username'])) ?>"><?= e((string) $post['username']) ?></a>
                     <?php else: ?>
                         departed member
                     <?php endif; ?>
@@ -102,11 +109,11 @@ admin_header('Posts', 'Every message on the board, newest first.');
                 </span>
             </div>
 
-            <p class="mt-1 text-xs leading-relaxed text-ink-soft"><?= e(excerpt((string) $post['body'], 240)) ?></p>
+            <p class="mt-1 text-xs leading-relaxed text-soft"><?= e(excerpt((string) $post['body'], 240)) ?></p>
 
             <div class="mt-2 flex gap-1">
-                <a class="btn btn-ghost btn-sm" href="<?= e(url('edit_post.php?id=' . (int) $post['id'])) ?>">Edit</a>
-                <form method="post" action="<?= e(url('admin/posts.php')) ?>" onsubmit="return confirm('Delete this post?');">
+                <a class="btn btn-ghost btn-sm" href="<?= e(url('post/' . rawurlencode((string) $post['ref']) . '/edit')) ?>">Edit</a>
+                <form method="post" action="<?= e(url('admin/posts')) ?>" onsubmit="return confirm('Delete this post?');">
                     <?= csrf_field() ?>
                     <input type="hidden" name="action" value="delete">
                     <input type="hidden" name="id" value="<?= e((string) (int) $post['id']) ?>">
@@ -117,12 +124,12 @@ admin_header('Posts', 'Every message on the board, newest first.');
     <?php endforeach; ?>
 
     <?php if ($posts === []): ?>
-        <p class="px-4 py-8 text-center text-sm italic text-ink-soft">No posts match.</p>
+        <p class="px-4 py-8 text-center text-sm italic text-soft">No posts match.</p>
     <?php endif; ?>
 </section>
 
 <?php if ($totalPages > 1): ?>
-    <?php $base = 'admin/posts.php?' . ($search !== '' ? 'q=' . rawurlencode($search) . '&' : ''); ?>
+    <?php $base = 'admin/posts?' . ($search !== '' ? 'q=' . rawurlencode($search) . '&' : ''); ?>
     <nav aria-label="Pagination" class="mt-5 flex flex-wrap items-center justify-center gap-1">
         <?php foreach (page_window($page, $totalPages, 3) as $p): ?>
             <a class="btn btn-sm <?= $p === $page ? 'btn-primary' : 'btn-ghost' ?>" href="<?= e(url($base . 'page=' . $p)) ?>"><?= e((string) $p) ?></a>

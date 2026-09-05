@@ -5,6 +5,13 @@
 
 declare(strict_types=1);
 
+// This page is a route target, not a public address. It is reached only
+// through the front controller, which has already resolved the request.
+if (!defined('GF_ROUTER')) {
+    http_response_code(404);
+    exit;
+}
+
 require_once __DIR__ . '/layout.php';
 
 $staff = require_admin();
@@ -42,7 +49,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 
     log_admin_action((int) $staff['id'], 'update_settings', 'Board settings saved.');
     flash('success', 'The settings have been saved.');
-    redirect('admin/settings.php');
+    redirect(url('admin/settings'));
 }
 
 /** @var array<string, string> $values */
@@ -61,7 +68,7 @@ admin_header('Settings', 'Values stored in the database and read on every page l
             Board settings
         </h2>
 
-        <form method="post" action="<?= e(url('admin/settings.php')) ?>" class="space-y-5 p-5">
+        <form method="post" action="<?= e(url('admin/settings')) ?>" class="space-y-5 p-5">
             <?= csrf_field() ?>
 
             <?php foreach ($schema as $key => $meta): ?>
@@ -73,7 +80,7 @@ admin_header('Settings', 'Values stored in the database and read on every page l
                                 <?= $current === '1' ? 'checked' : '' ?>>
                             <span>
                                 <span class="font-medium"><?= e($meta['label']) ?></span>
-                                <span class="block text-xs text-ink-soft"><?= e($meta['help']) ?></span>
+                                <span class="block text-xs text-soft"><?= e($meta['help']) ?></span>
                             </span>
                         </label>
                     <?php else: ?>
@@ -98,11 +105,11 @@ admin_header('Settings', 'Values stored in the database and read on every page l
             Environment
         </h2>
         <dl class="divide-rule text-sm">
-            <div class="flex justify-between px-5 py-2"><dt class="text-ink-soft">PHP version</dt><dd class="font-medium text-ink"><?= e(PHP_VERSION) ?></dd></div>
-            <div class="flex justify-between px-5 py-2"><dt class="text-ink-soft">Database</dt><dd class="font-medium text-ink"><?= e(DB_NAME) ?> at <?= e(DB_HOST) ?></dd></div>
-            <div class="flex justify-between px-5 py-2"><dt class="text-ink-soft">Base URL</dt><dd class="font-medium text-ink"><?= e(BASE_URL === '' ? '/' : BASE_URL) ?></dd></div>
-            <div class="flex justify-between px-5 py-2"><dt class="text-ink-soft">Secure cookies</dt><dd class="font-medium text-ink"><?= COOKIE_SECURE ? 'On' : 'Off' ?></dd></div>
-            <div class="flex justify-between px-5 py-2"><dt class="text-ink-soft">Debug mode</dt><dd class="font-medium text-ink"><?= DEBUG_MODE ? 'On' : 'Off' ?></dd></div>
+            <div class="flex justify-between px-5 py-2"><dt class="text-soft">PHP version</dt><dd class="font-medium text-ink"><?= e(PHP_VERSION) ?></dd></div>
+            <div class="flex justify-between px-5 py-2"><dt class="text-soft">Database</dt><dd class="font-medium text-ink"><?= e(DB_NAME) ?> at <?= e(DB_HOST) ?></dd></div>
+            <div class="flex justify-between px-5 py-2"><dt class="text-soft">Base URL</dt><dd class="font-medium text-ink"><?= e(BASE_URL === '' ? '/' : BASE_URL) ?></dd></div>
+            <div class="flex justify-between px-5 py-2"><dt class="text-soft">Secure cookies</dt><dd class="font-medium text-ink"><?= COOKIE_SECURE ? 'On' : 'Off' ?></dd></div>
+            <div class="flex justify-between px-5 py-2"><dt class="text-soft">Debug mode</dt><dd class="font-medium text-ink"><?= DEBUG_MODE ? 'On' : 'Off' ?></dd></div>
         </dl>
     </section>
 </div>

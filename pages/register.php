@@ -5,10 +5,17 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/includes/functions.php';
+// This page is a route target, not a public address. It is reached only
+// through the front controller, which has already resolved the request.
+if (!defined('GF_ROUTER')) {
+    http_response_code(404);
+    exit;
+}
+
+require_once dirname(__DIR__) . '/includes/functions.php';
 
 if (is_logged_in()) {
-    redirect('index.php');
+    redirect(url(''));
 }
 
 $errors   = [];
@@ -74,7 +81,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 
         login_user(db_insert_id());
         flash('success', 'Welcome to the hall, ' . $username . '.');
-        redirect('index.php');
+        redirect(url(''));
     }
 }
 
@@ -82,7 +89,7 @@ $pageTitle       = 'Register';
 $pageDescription = 'Create a GodsForum account.';
 $breadcrumbs     = [['label' => 'Register']];
 
-require __DIR__ . '/includes/header.php';
+require dirname(__DIR__) . '/includes/header.php';
 ?>
 
 <div class="mx-auto max-w-lg">
@@ -92,7 +99,7 @@ require __DIR__ . '/includes/header.php';
             Create an account
         </h1>
 
-        <form method="post" action="<?= e(url('register.php')) ?>" class="space-y-4 p-5" autocomplete="on">
+        <form method="post" action="<?= e(url('register')) ?>" class="space-y-4 p-5" autocomplete="on">
             <?= csrf_field() ?>
 
             <?php if ($errors !== []): ?>
@@ -143,12 +150,12 @@ require __DIR__ . '/includes/header.php';
                 Register
             </button>
 
-            <p class="text-center text-xs text-ink-soft">
+            <p class="text-center text-xs text-soft">
                 Already a member?
-                <a class="font-medium text-crimson hover:underline" href="<?= e(url('login.php')) ?>">Sign in instead</a>.
+                <a class="font-medium hover:underline" href="<?= e(url('login')) ?>">Sign in instead</a>.
             </p>
         </form>
     </section>
 </div>
 
-<?php require __DIR__ . '/includes/footer.php'; ?>
+<?php require dirname(__DIR__) . '/includes/footer.php'; ?>

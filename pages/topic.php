@@ -5,33 +5,35 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/includes/functions.php';
-
-$topicId = param_int('id');
-$topic = $topicId > 0
-    ? db_one(
-        'SELECT t.id, t.title, t.is_pinned, t.is_locked, t.view_count, t.reply_count, t.created_at,
-                t.user_id AS author_id,
-                b.id AS board_id, b.name AS board_name, b.is_locked AS board_locked,
-                c.name AS category_name
-           FROM topics t
-           JOIN boards b ON b.id = t.board_id
-           JOIN categories c ON c.id = b.category_id
-          WHERE t.id = :id LIMIT 1',
-        ['id' => $topicId]
-    )
-    : null;
-
-if ($topic === null) {
+// This page is a route target, not a public address. It is reached only
+// through the front controller, which has already resolved the request.
+if (!defined('GF_ROUTER')) {
     http_response_code(404);
-    $pageTitle = 'Topic not found';
-    require __DIR__ . '/includes/header.php';
-    echo '<div class="panel p-10 text-center"><h1 class="font-serif text-xl text-ink">Topic not found</h1>'
-       . '<p class="mt-2 text-sm text-ink-soft">This topic may have been removed.</p>'
-       . '<a class="btn btn-primary mt-5" href="' . e(url('index.php')) . '">Back to board index</a></div>';
-    require __DIR__ . '/includes/footer.php';
     exit;
 }
+
+require_once dirname(__DIR__) . '/includes/functions.php';
+
+/** @var array<string, string> $route */
+$topic = db_one(
+    'SELECT t.id, t.title, t.slug, t.is_pinned, t.is_locked, t.view_count, t.reply_count, t.created_at,
+            t.user_id AS author_id,
+            b.id AS board_id, b.name AS board_name, b.slug AS board_slug, b.is_locked AS board_locked,
+            c.name AS category_name
+       FROM topics t
+       JOIN boards b ON b.id = t.board_id
+       JOIN categories c ON c.id = b.category_id
+      WHERE t.slug = :slug LIMIT 1',
+    ['slug' => (string) ($route['slug'] ?? '')]
+);
+
+if ($topic === null) {
+    router_not_found();
+}
+
+$topicId   = (int) $topic['id'];
+$topicSlug = (string) $topic['slug'];
+$boardUrl  = board_url((string) $topic['board_slug']);
 
 $user = current_user();
 
@@ -64,8 +66,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             $replyError = 'You are posting too quickly. Please wait a few seconds and try again.';
         } else {
             db_query(
-                'INSERT INTO posts (topic_id, user_id, body, ip_address) VALUES (:t, :u, :b, :ip)',
+                'INSERT INTO posts (ref, topic_id, user_id, body, ip_address) VALUES (:r, :t, :u, :b, :ip)',
                 [
+                    'r'  => generate_ref(),
                     't'  => (int) $topic['id'],
                     'u'  => (int) $user['id'],
                     'b'  => $replyDraft,
@@ -80,7 +83,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 ((int) db_value('SELECT COUNT(*) FROM posts WHERE topic_id = :t', ['t' => (int) $topic['id']], 1))
                 / POSTS_PER_PAGE
             ));
-            redirect(topic_url((int) $topic['id'], (string) $topic['title'], $lastPage) . '#bottom');
+            redirect(topic_url($topicSlug, $lastPage) . '#bottom');
         }
     }
 }
@@ -90,11 +93,11 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 // ---------------------------------------------------------------------------
 $totalPosts = (int) db_value('SELECT COUNT(*) FROM posts WHERE topic_id = :t', ['t' => $topicId], 0);
 $totalPages = max(1, (int) ceil($totalPosts / POSTS_PER_PAGE));
-$page       = min(max(1, param_int('page', 1)), $totalPages);
+$page       = min(max(1, (int) ($route['page'] ?? 1)), $totalPages);
 $offset     = ($page - 1) * POSTS_PER_PAGE;
 
 $posts = db_all(
-    'SELECT p.id, p.body, p.created_at, p.edited_at,
+    'SELECT p.id, p.ref, p.body, p.created_at, p.edited_at,
             u.id AS user_id, u.username, u.role, u.avatar, u.signature, u.post_count, u.created_at AS joined_at
        FROM posts p
        LEFT JOIN users u ON u.id = p.user_id
@@ -119,19 +122,19 @@ $pageTitle       = (string) $topic['title'];
 $pageDescription = 'Discussion in ' . (string) $topic['board_name'];
 $breadcrumbs     = [
     ['label' => (string) $topic['category_name']],
-    ['label' => (string) $topic['board_name'], 'url' => url('board.php?id=' . (int) $topic['board_id'])],
+    ['label' => (string) $topic['board_name'], 'url' => $boardUrl],
     ['label' => excerpt((string) $topic['title'], 48)],
 ];
 
-require __DIR__ . '/includes/header.php';
+require dirname(__DIR__) . '/includes/header.php';
 ?>
 
 <div class="mb-5 flex flex-wrap items-start justify-between gap-3">
     <div>
-        <h1 class="max-w-2xl font-serif text-2xl font-semibold leading-tight text-ink">
+        <h1 class="max-w-2xl font-serif text-2xl font-semibold leading-tight">
             <?= e((string) $topic['title']) ?>
         </h1>
-        <p class="mt-1 flex flex-wrap items-center gap-2 text-xs text-ink-soft">
+        <p class="mt-1 flex flex-wrap items-center gap-2 text-xs text-soft">
             <?php if ((int) $topic['is_pinned'] === 1): ?><span class="tag tag-gold">Pinned</span><?php endif; ?>
             <?php if ($locked): ?><span class="tag tag-crimson">Locked</span><?php endif; ?>
             <span><?= e(number_format($totalPosts)) ?> post<?= $totalPosts === 1 ? '' : 's' ?></span>
@@ -143,7 +146,7 @@ require __DIR__ . '/includes/header.php';
     </div>
 
     <div class="flex flex-wrap gap-2">
-        <a class="btn btn-ghost btn-sm" href="<?= e(url('board.php?id=' . (int) $topic['board_id'])) ?>">
+        <a class="btn btn-ghost btn-sm" href="<?= e($boardUrl) ?>">
             <span class="material-icons-outlined text-[16px]" aria-hidden="true">arrow_back</span>
             Back to board
         </a>
@@ -164,7 +167,7 @@ require __DIR__ . '/includes/header.php';
                 <span>#<?= e((string) $number) ?> &middot; <?= e(full_date((string) $post['created_at'])) ?></span>
                 <span class="normal-case tracking-normal">
                     <?php if ($post['edited_at'] !== null): ?>
-                        <span class="text-[11px] italic text-ink-soft">edited <?= e(time_ago((string) $post['edited_at'])) ?></span>
+                        <span class="text-[11px] italic text-soft">edited <?= e(time_ago((string) $post['edited_at'])) ?></span>
                     <?php endif; ?>
                 </span>
             </header>
@@ -172,19 +175,19 @@ require __DIR__ . '/includes/header.php';
             <div class="flex flex-col gap-4 p-4 sm:flex-row">
                 <div class="w-full shrink-0 border-b border-rule pb-3 text-center sm:w-40 sm:border-b-0 sm:border-r sm:pb-0 sm:pr-4">
                     <img src="<?= e(avatar_url(isset($post['avatar']) ? (string) $post['avatar'] : null)) ?>" alt=""
-                         class="mx-auto h-16 w-16 border border-rule bg-parchment-dark object-cover">
+                         class="mx-auto h-16 w-16 border border-rule object-cover" style="background-color: var(--page-alt)">
                     <?php if ($post['user_id'] !== null): ?>
-                        <a class="mt-2 block text-sm font-semibold text-ink hover:text-crimson hover:underline"
-                           href="<?= e(url('profile.php?id=' . (int) $post['user_id'])) ?>"><?= e((string) $post['username']) ?></a>
+                        <a class="row-link mt-2 block text-sm font-semibold hover:underline"
+                           href="<?= e(member_url((string) $post['username'])) ?>"><?= e((string) $post['username']) ?></a>
                         <span class="mt-1 inline-block <?= $post['role'] === 'admin' ? 'tag tag-crimson' : ($post['role'] === 'moderator' ? 'tag tag-forest' : 'tag') ?>">
                             <?= e(role_label((string) $post['role'])) ?>
                         </span>
-                        <dl class="mt-2 space-y-0.5 text-[11px] text-ink-soft">
-                            <div><dt class="inline">Posts</dt> <dd class="inline font-medium text-ink"><?= e(number_format((int) $post['post_count'])) ?></dd></div>
-                            <div><dt class="inline">Joined</dt> <dd class="inline font-medium text-ink"><?= e(date('M Y', (int) strtotime((string) $post['joined_at']))) ?></dd></div>
+                        <dl class="mt-2 space-y-0.5 text-[11px] text-soft">
+                            <div><dt class="inline">Posts</dt> <dd class="inline font-medium"><?= e(number_format((int) $post['post_count'])) ?></dd></div>
+                            <div><dt class="inline">Joined</dt> <dd class="inline font-medium"><?= e(date('M Y', (int) strtotime((string) $post['joined_at']))) ?></dd></div>
                         </dl>
                     <?php else: ?>
-                        <p class="mt-2 text-sm font-semibold italic text-ink-soft">Departed member</p>
+                        <p class="mt-2 text-sm font-semibold italic text-soft">Departed member</p>
                     <?php endif; ?>
                 </div>
 
@@ -192,7 +195,7 @@ require __DIR__ . '/includes/header.php';
                     <div class="prose-post"><?= format_post((string) $post['body']) ?></div>
 
                     <?php if ($post['user_id'] !== null && (string) $post['signature'] !== ''): ?>
-                        <p class="mt-4 border-t border-dashed border-rule pt-2 text-xs italic text-ink-soft">
+                        <p class="mt-4 border-t border-dashed border-rule pt-2 text-xs italic text-soft">
                             <?= e((string) $post['signature']) ?>
                         </p>
                     <?php endif; ?>
@@ -205,17 +208,17 @@ require __DIR__ . '/includes/header.php';
                                 </a>
                             <?php endif; ?>
                             <?php if ($user !== null && ((int) $post['user_id'] === (int) $user['id'] || is_admin())): ?>
-                                <a class="btn btn-ghost btn-sm" href="<?= e(url('edit_post.php?id=' . (int) $post['id'])) ?>">
+                                <a class="btn btn-ghost btn-sm" href="<?= e(url('post/' . rawurlencode((string) $post['ref']) . '/edit')) ?>">
                                     <span class="material-icons-outlined text-[16px]" aria-hidden="true">edit</span> Edit
                                 </a>
                             <?php endif; ?>
                             <?php if ($user !== null && (int) $post['user_id'] !== (int) $user['id']): ?>
-                                <a class="btn btn-ghost btn-sm text-crimson" href="<?= e(url('report.php?post=' . (int) $post['id'])) ?>">
+                                <a class="btn btn-danger btn-sm" href="<?= e(url('post/' . rawurlencode((string) $post['ref']) . '/report')) ?>">
                                     <span class="material-icons-outlined text-[16px]" aria-hidden="true">flag</span> Report
                                 </a>
                             <?php endif; ?>
-                            <a class="ml-auto text-[11px] text-ink-soft hover:text-crimson hover:underline"
-                               href="<?= e(topic_url((int) $topic['id'], (string) $topic['title'], $page)) ?>#post-<?= e((string) (int) $post['id']) ?>">Permalink</a>
+                            <a class="ml-auto text-[11px] text-soft hover:underline"
+                               href="<?= e(post_url($topicSlug, (int) $post['id'], $page)) ?>">Permalink</a>
                         </div>
                     <?php endif; ?>
                 </div>
@@ -227,15 +230,15 @@ require __DIR__ . '/includes/header.php';
 <?php if ($totalPages > 1): ?>
     <nav aria-label="Pagination" class="mt-5 flex flex-wrap items-center justify-center gap-1 text-sm">
         <?php if ($page > 1): ?>
-            <a class="btn btn-ghost btn-sm" href="<?= e(topic_url($topicId, (string) $topic['title'], $page - 1)) ?>">Previous</a>
+            <a class="btn btn-ghost btn-sm" href="<?= e(topic_url($topicSlug, $page - 1)) ?>">Previous</a>
         <?php endif; ?>
         <?php foreach (page_window($page, $totalPages) as $p): ?>
             <a class="btn btn-sm <?= $p === $page ? 'btn-primary' : 'btn-ghost' ?>"
-               href="<?= e(topic_url($topicId, (string) $topic['title'], $p)) ?>"
+               href="<?= e(topic_url($topicSlug, $p)) ?>"
                <?= $p === $page ? 'aria-current="page"' : '' ?>><?= e((string) $p) ?></a>
         <?php endforeach; ?>
         <?php if ($page < $totalPages): ?>
-            <a class="btn btn-ghost btn-sm" href="<?= e(topic_url($topicId, (string) $topic['title'], $page + 1)) ?>">Next</a>
+            <a class="btn btn-ghost btn-sm" href="<?= e(topic_url($topicSlug, $page + 1)) ?>">Next</a>
         <?php endif; ?>
     </nav>
 <?php endif; ?>
@@ -249,11 +252,11 @@ require __DIR__ . '/includes/header.php';
     </h2>
 
     <?php if ($canReply): ?>
-        <form method="post" action="<?= e(topic_url($topicId, (string) $topic['title'], $page)) ?>#reply" class="p-4">
+        <form method="post" action="<?= e(topic_url($topicSlug, $page)) ?>#reply" class="p-4">
             <?= csrf_field() ?>
 
             <?php if ($replyError !== ''): ?>
-                <p class="mb-3 border-l-4 border-crimson bg-crimson/10 px-3 py-2 text-sm text-crimson"><?= e($replyError) ?></p>
+                <p class="alert alert-error mb-3"><?= e($replyError) ?></p>
             <?php endif; ?>
 
             <label class="field-label" for="body">Your message</label>
@@ -267,19 +270,19 @@ require __DIR__ . '/includes/header.php';
                     <span class="material-icons-outlined text-[18px]" aria-hidden="true">send</span>
                     Post reply
                 </button>
-                <a class="btn btn-ghost" href="<?= e(url('board.php?id=' . (int) $topic['board_id'])) ?>">Cancel</a>
+                <a class="btn btn-ghost" href="<?= e($boardUrl) ?>">Cancel</a>
             </div>
         </form>
     <?php elseif ($locked): ?>
-        <p class="p-6 text-center text-sm text-ink-soft">This topic is locked. No further replies are accepted.</p>
+        <p class="p-6 text-center text-sm text-soft">This topic is locked. No further replies are accepted.</p>
     <?php else: ?>
-        <p class="p-6 text-center text-sm text-ink-soft">
-            <a class="font-medium text-crimson hover:underline" href="<?= e(url('login.php')) ?>">Sign in</a>
+        <p class="p-6 text-center text-sm text-soft">
+            <a class="font-medium hover:underline" href="<?= e(url('login')) ?>">Sign in</a>
             or
-            <a class="font-medium text-crimson hover:underline" href="<?= e(url('register.php')) ?>">register</a>
+            <a class="font-medium hover:underline" href="<?= e(url('register')) ?>">register</a>
             to join this discussion.
         </p>
     <?php endif; ?>
 </section>
 
-<?php require __DIR__ . '/includes/footer.php'; ?>
+<?php require dirname(__DIR__) . '/includes/footer.php'; ?>

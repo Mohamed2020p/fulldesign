@@ -17,7 +17,7 @@
 
 Options -Indexes
 
-DirectoryIndex index.php index.html
+DirectoryIndex router.php
 
 # Make sure Apache is allowed to read the .htaccess rules in subfolders.
 # AllowOverride All must be set for this directory in the server config.
@@ -38,8 +38,25 @@ DirectoryIndex index.php index.html
 
     RewriteRule ^includes/     - [F,L]
     RewriteRule ^database/     - [F,L]
+    RewriteRule ^pages/        - [F,L]
     RewriteRule ^assets/src/   - [F,L]
     RewriteRule ^node_modules/ - [F,L]
+
+    # --- Clean URLs ---------------------------------------------------------
+    # Anything ending in .php is bounced to its readable address, so an old
+    # link or a hand typed extension never leaves a .php URL in the address
+    # bar and never produces two addresses for the same page.
+    RewriteCond %{THE_REQUEST} "\s/(.*?)(index)?\.php[\s?]" [NC]
+    RewriteRule ^ %1 [R=301,L,NE]
+
+    # Real files and real directories are served as they are: the stylesheet,
+    # the images and the uploaded avatars never touch the router.
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+
+    # Everything else is a readable address; the front controller resolves it.
+    RewriteRule ^ router.php [L]
 </IfModule>
 
 # Fallback for servers without mod_rewrite: deny the PHP and SQL files that
@@ -56,6 +73,11 @@ DirectoryIndex index.php index.html
     Header always set X-Frame-Options "SAMEORIGIN"
     Header always set Referrer-Policy "strict-origin-when-cross-origin"
     Header always set Permissions-Policy "geolocation=(), microphone=(), camera=()"
+    # Sent only over TLS: a browser must ignore HSTS on plain HTTP, and
+    # sending it before the site is fully on HTTPS would lock visitors out.
+    <If "%{HTTPS} == 'on'">
+        Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains"
+    </If>
     Header always set Content-Security-Policy "default-src 'self'; img-src 'self' data:; style-src 'self' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self'; form-action 'self'; frame-ancestors 'self'; base-uri 'self'"
 </IfModule>
 

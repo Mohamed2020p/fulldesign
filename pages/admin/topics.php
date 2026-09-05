@@ -5,6 +5,13 @@
 
 declare(strict_types=1);
 
+// This page is a route target, not a public address. It is reached only
+// through the front controller, which has already resolved the request.
+if (!defined('GF_ROUTER')) {
+    http_response_code(404);
+    exit;
+}
+
 require_once __DIR__ . '/layout.php';
 
 $staff = require_admin();
@@ -49,7 +56,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         }
     }
 
-    redirect('admin/topics.php' . (param_int('page', 1) > 1 ? '?page=' . param_int('page', 1) : ''));
+    redirect(url('admin/topics' . (param_int('page', 1) > 1 ? '?page=' . param_int('page', 1) : '')));
 }
 
 $boards  = db_all('SELECT id, name FROM boards ORDER BY position ASC, id ASC');
@@ -61,7 +68,7 @@ $page       = min(max(1, param_int('page', 1)), $totalPages);
 $offset     = ($page - 1) * $perPage;
 
 $topics = db_all(
-    'SELECT t.id, t.title, t.is_pinned, t.is_locked, t.reply_count, t.view_count, t.created_at,
+    'SELECT t.id, t.title, t.slug, t.is_pinned, t.is_locked, t.reply_count, t.view_count, t.created_at,
             b.id AS board_id, b.name AS board_name, u.username
        FROM topics t
        JOIN boards b ON b.id = t.board_id
@@ -85,10 +92,10 @@ admin_header('Topics', 'Pin, lock, move or remove any discussion.');
         <?php foreach ($topics as $topic): ?>
             <div class="flex flex-wrap items-center gap-3 px-4 py-3">
                 <div class="min-w-0 flex-1">
-                    <a class="row-link text-sm" href="<?= e(topic_url((int) $topic['id'], (string) $topic['title'])) ?>">
+                    <a class="row-link text-sm" href="<?= e(topic_url((string) $topic['slug'])) ?>">
                         <?= e(excerpt((string) $topic['title'], 70)) ?>
                     </a>
-                    <p class="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-ink-soft">
+                    <p class="mt-0.5 flex flex-wrap items-center gap-1.5 text-[11px] text-soft">
                         <?php if ((int) $topic['is_pinned'] === 1): ?><span class="tag tag-gold">Pinned</span><?php endif; ?>
                         <?php if ((int) $topic['is_locked'] === 1): ?><span class="tag tag-crimson">Locked</span><?php endif; ?>
                         <span><?= e((string) $topic['board_name']) ?> &middot; by <?= e((string) ($topic['username'] ?? 'departed member')) ?> &middot; <?= e(time_ago((string) $topic['created_at'])) ?></span>
@@ -98,21 +105,21 @@ admin_header('Topics', 'Pin, lock, move or remove any discussion.');
                 <span class="hidden w-24 text-center text-sm font-semibold text-ink lg:block"><?= e((string) (int) $topic['reply_count']) ?></span>
 
                 <div class="flex w-full flex-wrap items-center justify-end gap-1 lg:w-64">
-                    <form method="post" action="<?= e(url('admin/topics.php?page=' . $page)) ?>">
+                    <form method="post" action="<?= e(url('admin/topics?page=' . $page)) ?>">
                         <?= csrf_field() ?>
                         <input type="hidden" name="id" value="<?= e((string) (int) $topic['id']) ?>">
                         <input type="hidden" name="action" value="pin">
                         <button type="submit" class="btn btn-ghost btn-sm"><?= (int) $topic['is_pinned'] === 1 ? 'Unpin' : 'Pin' ?></button>
                     </form>
 
-                    <form method="post" action="<?= e(url('admin/topics.php?page=' . $page)) ?>">
+                    <form method="post" action="<?= e(url('admin/topics?page=' . $page)) ?>">
                         <?= csrf_field() ?>
                         <input type="hidden" name="id" value="<?= e((string) (int) $topic['id']) ?>">
                         <input type="hidden" name="action" value="lock">
                         <button type="submit" class="btn btn-ghost btn-sm"><?= (int) $topic['is_locked'] === 1 ? 'Unlock' : 'Lock' ?></button>
                     </form>
 
-                    <form method="post" action="<?= e(url('admin/topics.php?page=' . $page)) ?>" class="flex items-center gap-1">
+                    <form method="post" action="<?= e(url('admin/topics?page=' . $page)) ?>" class="flex items-center gap-1">
                         <?= csrf_field() ?>
                         <input type="hidden" name="id" value="<?= e((string) (int) $topic['id']) ?>">
                         <input type="hidden" name="action" value="move">
@@ -127,7 +134,7 @@ admin_header('Topics', 'Pin, lock, move or remove any discussion.');
                         <button type="submit" class="btn btn-ghost btn-sm">Move</button>
                     </form>
 
-                    <form method="post" action="<?= e(url('admin/topics.php?page=' . $page)) ?>"
+                    <form method="post" action="<?= e(url('admin/topics?page=' . $page)) ?>"
                           onsubmit="return confirm('Delete this topic and all of its posts?');">
                         <?= csrf_field() ?>
                         <input type="hidden" name="id" value="<?= e((string) (int) $topic['id']) ?>">
@@ -139,7 +146,7 @@ admin_header('Topics', 'Pin, lock, move or remove any discussion.');
         <?php endforeach; ?>
 
         <?php if ($topics === []): ?>
-            <p class="px-4 py-8 text-center text-sm italic text-ink-soft">No topics yet.</p>
+            <p class="px-4 py-8 text-center text-sm italic text-soft">No topics yet.</p>
         <?php endif; ?>
     </div>
 </section>
@@ -147,7 +154,7 @@ admin_header('Topics', 'Pin, lock, move or remove any discussion.');
 <?php if ($totalPages > 1): ?>
     <nav aria-label="Pagination" class="mt-5 flex flex-wrap items-center justify-center gap-1">
         <?php foreach (page_window($page, $totalPages, 3) as $p): ?>
-            <a class="btn btn-sm <?= $p === $page ? 'btn-primary' : 'btn-ghost' ?>" href="<?= e(url('admin/topics.php?page=' . $p)) ?>"><?= e((string) $p) ?></a>
+            <a class="btn btn-sm <?= $p === $page ? 'btn-primary' : 'btn-ghost' ?>" href="<?= e(url('admin/topics?page=' . $p)) ?>"><?= e((string) $p) ?></a>
         <?php endforeach; ?>
     </nav>
 <?php endif; ?>

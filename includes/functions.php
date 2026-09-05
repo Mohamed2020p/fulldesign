@@ -5,6 +5,14 @@
 
 declare(strict_types=1);
 
+// Defence in depth. Apache already denies this directory, but if a server is
+// misconfigured these files must still refuse to run as a request target.
+if (!defined('GF_ROUTER') && PHP_SAPI !== 'cli' && realpath(__FILE__) === realpath((string) ($_SERVER['SCRIPT_FILENAME'] ?? ''))) {
+    http_response_code(404);
+    exit;
+}
+
+
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/db.php';
 
@@ -58,6 +66,16 @@ function gf_send_security_headers(): void
     header('X-Frame-Options: SAMEORIGIN');
     header('Referrer-Policy: strict-origin-when-cross-origin');
     header('Permissions-Policy: geolocation=(), microphone=(), camera=()');
+
+    // Over HTTPS, pin the browser to HTTPS for a year. Sent only on a secure
+    // connection, because a browser must ignore it on plain HTTP and sending
+    // it there would lock out a site that is not yet fully on TLS.
+    if (COOKIE_SECURE
+        || (($_SERVER['HTTPS'] ?? '') !== '' && ($_SERVER['HTTPS'] ?? '') !== 'off')
+        || (int) ($_SERVER['SERVER_PORT'] ?? 0) === 443
+        || strtolower((string) ($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https') {
+        header('Strict-Transport-Security: max-age=31536000; includeSubDomains');
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -220,14 +238,42 @@ function current_user(): ?array
     }
 
     $user = db_one(
-        'SELECT id, username, email, role, status, signature, avatar, post_count, created_at, last_seen_at
+        'SELECT id, username, email, role, status, theme, signature, avatar, post_count,
+                ban_reason, banned_until, created_at, last_seen_at
          FROM users WHERE id = :id LIMIT 1',
         ['id' => (int) $id]
     );
 
-    if ($user === null || $user['status'] !== 'active') {
+    if ($user === null) {
+        unset($_SESSION['user_id']);
+
+        return null;
+    }
+
+    // A timed suspension that has run its course lifts itself, so staff do not
+    // have to come back and undo every temporary ban by hand.
+    if ($user['status'] === 'banned' && $user['banned_until'] !== null
+        && strtotime((string) $user['banned_until']) <= time()) {
+        db_query(
+            'UPDATE users SET status = "active", ban_reason = "", banned_until = NULL, banned_by = NULL
+              WHERE id = :id',
+            ['id' => (int) $user['id']]
+        );
+        db_query(
+            'UPDATE bans SET lifted_at = NOW() WHERE user_id = :id AND lifted_at IS NULL',
+            ['id' => (int) $user['id']]
+        );
+
+        $user['status']       = 'active';
+        $user['ban_reason']   = '';
+        $user['banned_until'] = null;
+    }
+
+    if ($user['status'] !== 'active') {
+        $gfBanned = $user;
         $user = null;
         unset($_SESSION['user_id']);
+        gf_banned_notice($gfBanned);
 
         return null;
     }
@@ -238,6 +284,27 @@ function current_user(): ?array
     }
 
     return $user;
+}
+
+/**
+ * Show a suspended member why they cannot sign in, then stop the request.
+ *
+ * @param array<string, mixed> $user
+ */
+function gf_banned_notice(array $user): void
+{
+    // Only interrupt normal page views; a background asset request just ends.
+    if (defined('GF_SUPPRESS_BAN_NOTICE')) {
+        return;
+    }
+
+    $reason = trim((string) ($user['ban_reason'] ?? ''));
+    $until  = $user['banned_until'] !== null ? (string) $user['banned_until'] : null;
+
+    $_SESSION['gf_ban_notice'] = [
+        'reason' => $reason,
+        'until'  => $until,
+    ];
 }
 
 function is_logged_in(): bool
@@ -264,7 +331,7 @@ function require_login(): array
     $user = current_user();
     if ($user === null) {
         flash('error', 'Please sign in to continue.');
-        redirect('login.php');
+        redirect(url('login'));
     }
 
     return $user;
@@ -276,6 +343,22 @@ function require_admin(): array
     if (!is_admin()) {
         http_response_code(403);
         exit('You do not have permission to view the control room.');
+    }
+
+    return $user;
+}
+
+/**
+ * Require a full administrator, not merely a moderator.
+ *
+ * @return array<string, mixed>
+ */
+function require_super_admin(): array
+{
+    $user = require_admin();
+    if (!is_super_admin()) {
+        http_response_code(403);
+        exit('Only an administrator may use this page.');
     }
 
     return $user;
@@ -485,11 +568,101 @@ function post_int(string $key, int $default = 0): int
 // ---------------------------------------------------------------------------
 // Domain helpers
 // ---------------------------------------------------------------------------
-function topic_url(int $topicId, string $title, int $page = 1): string
-{
-    $suffix = $page > 1 ? '&page=' . $page : '';
+// ---------------------------------------------------------------------------
+// Clean URL builders
+//
+// Every public address is a readable path. No .php extension and no numeric
+// query string is ever shown, so the addresses reveal nothing about the
+// storage layer.
+//
+//   /board/general-talk
+//   /board/general-talk/page/2
+//   /topic/what-does-everyone-drink-while-posting
+//   /topic/what-does-everyone-drink-while-posting/page/3
+//   /member/hermes
+// ---------------------------------------------------------------------------
 
-    return url('topic.php?id=' . $topicId . '&slug=' . rawurlencode(slugify($title)) . $suffix);
+function topic_url(string $slug, int $page = 1): string
+{
+    $path = 'topic/' . rawurlencode($slug);
+    if ($page > 1) {
+        $path .= '/page/' . $page;
+    }
+
+    return url($path);
+}
+
+function board_url(string $slug, int $page = 1): string
+{
+    $path = 'board/' . rawurlencode($slug);
+    if ($page > 1) {
+        $path .= '/page/' . $page;
+    }
+
+    return url($path);
+}
+
+/**
+ * A random, unguessable public reference for a post.
+ *
+ * Public addresses use this instead of the auto increment id so the address
+ * space cannot be walked and no internal numbering is disclosed.
+ */
+function generate_ref(int $length = 12): string
+{
+    $alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
+    $max = strlen($alphabet) - 1;
+    $ref = '';
+
+    for ($i = 0; $i < $length; $i++) {
+        $ref .= $alphabet[random_int(0, $max)];
+    }
+
+    return $ref;
+}
+
+function member_url(string $username): string
+{
+    return url('member/' . rawurlencode($username));
+}
+
+function post_url(string $topicSlug, int $postId, int $page = 1): string
+{
+    return topic_url($topicSlug, $page) . '#post-' . $postId;
+}
+
+/**
+ * Build a unique slug for a table, appending -2, -3 and so on when needed.
+ *
+ * $table is never user input: it is a literal chosen by the calling code.
+ */
+function unique_slug(string $table, string $text, ?int $ignoreId = null): string
+{
+    $allowed = ['topics', 'boards', 'categories'];
+    if (!in_array($table, $allowed, true)) {
+        throw new InvalidArgumentException('Unknown table for slug generation.');
+    }
+
+    $base = slugify($text);
+    $slug = $base;
+    $suffix = 1;
+
+    while (true) {
+        $sql = 'SELECT COUNT(*) FROM `' . $table . '` WHERE slug = :slug';
+        $params = ['slug' => $slug];
+
+        if ($ignoreId !== null) {
+            $sql .= ' AND id <> :id';
+            $params['id'] = $ignoreId;
+        }
+
+        if ((int) db_value($sql, $params, 0) === 0) {
+            return $slug;
+        }
+
+        $suffix++;
+        $slug = $base . '-' . $suffix;
+    }
 }
 
 function recount_topic(int $topicId): void
@@ -530,6 +703,20 @@ function log_admin_action(int $adminId, string $action, string $details = ''): v
             'details' => mb_substr($details, 0, 500),
             'ip'      => client_ip(),
         ]
+    );
+}
+
+/**
+ * Store a board setting, creating the row if it is not there yet.
+ *
+ * The key and the value are both bound, so neither can influence the query.
+ */
+function setting_put(string $key, string $value): void
+{
+    db_query(
+        'INSERT INTO settings (setting_key, setting_value) VALUES (:k, :v)
+         ON DUPLICATE KEY UPDATE setting_value = VALUES(setting_value)',
+        ['k' => $key, 'v' => $value]
     );
 }
 

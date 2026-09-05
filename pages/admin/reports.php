@@ -5,6 +5,13 @@
 
 declare(strict_types=1);
 
+// This page is a route target, not a public address. It is reached only
+// through the front controller, which has already resolved the request.
+if (!defined('GF_ROUTER')) {
+    http_response_code(404);
+    exit;
+}
+
 require_once __DIR__ . '/layout.php';
 
 $staff = require_admin();
@@ -41,7 +48,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         }
     }
 
-    redirect('admin/reports.php');
+    redirect(url('admin/reports'));
 }
 
 $filter = param_string('status', 'open');
@@ -55,7 +62,7 @@ $params = $filter === 'all' ? [] : ['status' => $filter];
 $reports = db_all(
     'SELECT r.id, r.reason, r.status, r.created_at,
             p.id AS post_id, p.body, p.created_at AS post_created,
-            t.id AS topic_id, t.title,
+            t.id AS topic_id, t.title, t.slug AS topic_slug,
             author.username AS author_name, author.id AS author_id,
             reporter.username AS reporter_name, reporter.id AS reporter_id
        FROM reports r
@@ -74,7 +81,7 @@ admin_header('Reports', 'Posts flagged by members for staff attention.');
 <nav aria-label="Report filters" class="mb-5 flex flex-wrap gap-1">
     <?php foreach (['open' => 'Open', 'resolved' => 'Resolved', 'all' => 'All'] as $key => $label): ?>
         <a class="btn btn-sm <?= $filter === $key ? 'btn-primary' : 'btn-ghost' ?>"
-           href="<?= e(url('admin/reports.php?status=' . $key)) ?>"><?= e($label) ?></a>
+           href="<?= e(url('admin/reports?status=' . $key)) ?>"><?= e($label) ?></a>
     <?php endforeach; ?>
 </nav>
 
@@ -93,25 +100,25 @@ admin_header('Reports', 'Posts flagged by members for staff attention.');
                     <span class="font-semibold">Reason:</span> <?= e((string) $report['reason']) ?>
                 </p>
 
-                <p class="text-xs text-ink-soft">
+                <p class="text-xs text-soft">
                     Reported by
                     <?php if ($report['reporter_id'] !== null): ?>
-                        <a class="font-medium text-ink hover:text-crimson hover:underline" href="<?= e(url('profile.php?id=' . (int) $report['reporter_id'])) ?>"><?= e((string) $report['reporter_name']) ?></a>
+                        <a class="font-medium text-ink hover:underline" href="<?= e(member_url((string) $report['reporter_name'])) ?>"><?= e((string) $report['reporter_name']) ?></a>
                     <?php else: ?>
                         <span class="font-medium text-ink">a departed member</span>
                     <?php endif; ?>
                 </p>
 
                 <div class="border border-rule bg-parchment-dark/60 p-3">
-                    <p class="text-xs text-ink-soft">
+                    <p class="text-xs text-soft">
                         Post by
                         <?php if ($report['author_id'] !== null): ?>
-                            <a class="font-semibold text-ink hover:text-crimson hover:underline" href="<?= e(url('profile.php?id=' . (int) $report['author_id'])) ?>"><?= e((string) $report['author_name']) ?></a>
+                            <a class="font-semibold text-ink hover:underline" href="<?= e(member_url((string) $report['author_name'])) ?>"><?= e((string) $report['author_name']) ?></a>
                         <?php else: ?>
                             <span class="font-semibold text-ink">a departed member</span>
                         <?php endif; ?>
                         in
-                        <a class="hover:text-crimson hover:underline" href="<?= e(topic_url((int) $report['topic_id'], (string) $report['title'])) ?>#post-<?= e((string) (int) $report['post_id']) ?>">
+                        <a class="hover:underline" href="<?= e(topic_url((string) $report['topic_slug'])) ?>#post-<?= e((string) (int) $report['post_id']) ?>">
                             <?= e(excerpt((string) $report['title'], 60)) ?>
                         </a>
                         &middot; <?= e(full_date((string) $report['post_created'])) ?>
@@ -120,17 +127,17 @@ admin_header('Reports', 'Posts flagged by members for staff attention.');
                 </div>
 
                 <div class="flex flex-wrap gap-1">
-                    <a class="btn btn-ghost btn-sm" href="<?= e(topic_url((int) $report['topic_id'], (string) $report['title'])) ?>#post-<?= e((string) (int) $report['post_id']) ?>">View in context</a>
+                    <a class="btn btn-ghost btn-sm" href="<?= e(topic_url((string) $report['topic_slug'])) ?>#post-<?= e((string) (int) $report['post_id']) ?>">View in context</a>
 
                     <?php if ($report['status'] === 'open'): ?>
-                        <form method="post" action="<?= e(url('admin/reports.php')) ?>">
+                        <form method="post" action="<?= e(url('admin/reports')) ?>">
                             <?= csrf_field() ?>
                             <input type="hidden" name="action" value="resolve">
                             <input type="hidden" name="id" value="<?= e((string) (int) $report['id']) ?>">
                             <button type="submit" class="btn btn-primary btn-sm">Mark resolved</button>
                         </form>
                     <?php else: ?>
-                        <form method="post" action="<?= e(url('admin/reports.php')) ?>">
+                        <form method="post" action="<?= e(url('admin/reports')) ?>">
                             <?= csrf_field() ?>
                             <input type="hidden" name="action" value="reopen">
                             <input type="hidden" name="id" value="<?= e((string) (int) $report['id']) ?>">
@@ -138,7 +145,7 @@ admin_header('Reports', 'Posts flagged by members for staff attention.');
                         </form>
                     <?php endif; ?>
 
-                    <form method="post" action="<?= e(url('admin/reports.php')) ?>" onsubmit="return confirm('Delete the reported post?');">
+                    <form method="post" action="<?= e(url('admin/reports')) ?>" onsubmit="return confirm('Delete the reported post?');">
                         <?= csrf_field() ?>
                         <input type="hidden" name="action" value="delete_post">
                         <input type="hidden" name="id" value="<?= e((string) (int) $report['id']) ?>">
@@ -151,7 +158,7 @@ admin_header('Reports', 'Posts flagged by members for staff attention.');
     <?php endforeach; ?>
 
     <?php if ($reports === []): ?>
-        <p class="panel px-4 py-10 text-center text-sm italic text-ink-soft">Nothing in this queue.</p>
+        <p class="panel px-4 py-10 text-center text-sm italic text-soft">Nothing in this queue.</p>
     <?php endif; ?>
 </div>
 

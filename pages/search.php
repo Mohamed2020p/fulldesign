@@ -5,7 +5,14 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/includes/functions.php';
+// This page is a route target, not a public address. It is reached only
+// through the front controller, which has already resolved the request.
+if (!defined('GF_ROUTER')) {
+    http_response_code(404);
+    exit;
+}
+
+require_once dirname(__DIR__) . '/includes/functions.php';
 
 $query = mb_substr(param_string('q'), 0, 120);
 $scope = param_string('in', 'all');
@@ -40,8 +47,8 @@ if (mb_strlen($query) >= 3) {
 
     $results = db_all(
         'SELECT p.id AS post_id, p.body, p.created_at,
-                t.id AS topic_id, t.title,
-                b.name AS board_name, b.id AS board_id,
+                t.id AS topic_id, t.title, t.slug AS topic_slug,
+                b.name AS board_name, b.id AS board_id, b.slug AS board_slug,
                 u.id AS user_id, u.username
            FROM posts p
            JOIN topics t ON t.id = p.topic_id
@@ -58,7 +65,7 @@ $pageTitle       = 'Search';
 $pageDescription = 'Search every topic and post on GodsForum.';
 $breadcrumbs     = [['label' => 'Search']];
 
-require __DIR__ . '/includes/header.php';
+require dirname(__DIR__) . '/includes/header.php';
 ?>
 
 <section class="panel mb-6">
@@ -67,7 +74,7 @@ require __DIR__ . '/includes/header.php';
         Search the board
     </h1>
 
-    <form method="get" action="<?= e(url('search.php')) ?>" class="flex flex-wrap items-end gap-3 p-5">
+    <form method="get" action="<?= e(url('search')) ?>" class="flex flex-wrap items-end gap-3 p-5">
         <div class="min-w-[16rem] flex-1">
             <label class="field-label" for="q">Words to look for</label>
             <input class="field-input" type="search" id="q" name="q" value="<?= e($query) ?>"
@@ -90,9 +97,9 @@ require __DIR__ . '/includes/header.php';
 </section>
 
 <?php if ($query !== '' && mb_strlen($query) < 3): ?>
-    <p class="panel px-4 py-6 text-center text-sm text-ink-soft">Please type at least three characters.</p>
+    <p class="panel px-4 py-6 text-center text-sm text-soft">Please type at least three characters.</p>
 <?php elseif ($query !== ''): ?>
-    <p class="mb-3 text-sm text-ink-soft">
+    <p class="mb-3 text-sm text-soft">
         <?= e(number_format($total)) ?> result<?= $total === 1 ? '' : 's' ?> for
         <span class="font-semibold text-ink">&ldquo;<?= e($query) ?>&rdquo;</span>
     </p>
@@ -101,16 +108,16 @@ require __DIR__ . '/includes/header.php';
         <?php foreach ($results as $result): ?>
             <article class="px-4 py-3 transition-colors hover:bg-parchment-dark/40">
                 <h2 class="text-[15px] font-semibold">
-                    <a class="row-link" href="<?= e(topic_url((int) $result['topic_id'], (string) $result['title'])) ?>#post-<?= e((string) (int) $result['post_id']) ?>">
+                    <a class="row-link" href="<?= e(topic_url((string) $result['topic_slug'])) ?>#post-<?= e((string) (int) $result['post_id']) ?>">
                         <?= e((string) $result['title']) ?>
                     </a>
                 </h2>
-                <p class="mt-1 text-sm text-ink-soft"><?= e(excerpt((string) $result['body'], 200)) ?></p>
-                <p class="mt-1 text-[11px] text-ink-soft">
-                    <a class="hover:text-crimson hover:underline" href="<?= e(url('board.php?id=' . (int) $result['board_id'])) ?>"><?= e((string) $result['board_name']) ?></a>
+                <p class="mt-1 text-sm text-soft"><?= e(excerpt((string) $result['body'], 200)) ?></p>
+                <p class="mt-1 text-[11px] text-soft">
+                    <a class="hover:underline" href="<?= e(board_url((string) $result['board_slug'])) ?>"><?= e((string) $result['board_name']) ?></a>
                     &middot; by
                     <?php if ($result['user_id'] !== null): ?>
-                        <a class="font-medium text-ink hover:text-crimson hover:underline" href="<?= e(url('profile.php?id=' . (int) $result['user_id'])) ?>"><?= e((string) $result['username']) ?></a>
+                        <a class="font-medium text-ink hover:underline" href="<?= e(member_url((string) $result['username'])) ?>"><?= e((string) $result['username']) ?></a>
                     <?php else: ?>
                         <span class="font-medium text-ink">a departed member</span>
                     <?php endif; ?>
@@ -120,12 +127,12 @@ require __DIR__ . '/includes/header.php';
         <?php endforeach; ?>
 
         <?php if ($results === []): ?>
-            <p class="px-4 py-10 text-center text-sm text-ink-soft">Nothing matched that search.</p>
+            <p class="px-4 py-10 text-center text-sm text-soft">Nothing matched that search.</p>
         <?php endif; ?>
     </div>
 
     <?php if ($totalPages > 1): ?>
-        <?php $base = 'search.php?q=' . rawurlencode($query) . '&in=' . rawurlencode($scope); ?>
+        <?php $base = 'search?q=' . rawurlencode($query) . '&in=' . rawurlencode($scope); ?>
         <nav aria-label="Pagination" class="mt-5 flex flex-wrap items-center justify-center gap-1">
             <?php if ($page > 1): ?>
                 <a class="btn btn-ghost btn-sm" href="<?= e(url($base . '&page=' . ($page - 1))) ?>">Previous</a>
@@ -139,7 +146,7 @@ require __DIR__ . '/includes/header.php';
         </nav>
     <?php endif; ?>
 <?php else: ?>
-    <p class="panel px-4 py-10 text-center text-sm text-ink-soft">Type something above to search the archive.</p>
+    <p class="panel px-4 py-10 text-center text-sm text-soft">Type something above to search the archive.</p>
 <?php endif; ?>
 
-<?php require __DIR__ . '/includes/footer.php'; ?>
+<?php require dirname(__DIR__) . '/includes/footer.php'; ?>

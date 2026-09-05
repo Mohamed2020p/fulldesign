@@ -5,7 +5,14 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/includes/functions.php';
+// This page is a route target, not a public address. It is reached only
+// through the front controller, which has already resolved the request.
+if (!defined('GF_ROUTER')) {
+    http_response_code(404);
+    exit;
+}
+
+require_once dirname(__DIR__) . '/includes/functions.php';
 
 $search = mb_substr(param_string('q'), 0, 32);
 $sort   = param_string('sort', 'posts');
@@ -42,18 +49,18 @@ $pageTitle       = 'Members';
 $pageDescription = 'Everyone who posts at GodsForum.';
 $breadcrumbs     = [['label' => 'Members']];
 
-$queryBase = 'members.php?sort=' . rawurlencode($sort) . ($search !== '' ? '&q=' . rawurlencode($search) : '');
+$queryBase = 'members?sort=' . rawurlencode($sort) . ($search !== '' ? '&q=' . rawurlencode($search) : '');
 
-require __DIR__ . '/includes/header.php';
+require dirname(__DIR__) . '/includes/header.php';
 ?>
 
 <div class="mb-5 flex flex-wrap items-end justify-between gap-3">
     <div>
         <h1 class="font-serif text-2xl font-semibold text-ink">Members</h1>
-        <p class="mt-0.5 text-sm text-ink-soft"><?= e(number_format($total)) ?> active account<?= $total === 1 ? '' : 's' ?>.</p>
+        <p class="mt-0.5 text-sm text-soft"><?= e(number_format($total)) ?> active account<?= $total === 1 ? '' : 's' ?>.</p>
     </div>
 
-    <form method="get" action="<?= e(url('members.php')) ?>" class="flex flex-wrap items-end gap-2">
+    <form method="get" action="<?= e(url('members')) ?>" class="flex flex-wrap items-end gap-2">
         <div>
             <label class="field-label" for="q">Find a member</label>
             <input class="field-input w-52" type="search" id="q" name="q" value="<?= e($search) ?>" maxlength="32" placeholder="Username">
@@ -80,25 +87,25 @@ require __DIR__ . '/includes/header.php';
                  class="h-14 w-14 shrink-0 border border-rule bg-parchment-dark object-cover">
             <div class="min-w-0">
                 <h2 class="truncate text-sm font-semibold">
-                    <a class="row-link" href="<?= e(url('profile.php?id=' . (int) $member['id'])) ?>"><?= e((string) $member['username']) ?></a>
+                    <a class="row-link" href="<?= e(member_url((string) $member['username'])) ?>"><?= e((string) $member['username']) ?></a>
                 </h2>
                 <p class="mt-1">
                     <span class="<?= $member['role'] === 'admin' ? 'tag tag-crimson' : ($member['role'] === 'moderator' ? 'tag tag-forest' : 'tag') ?>">
                         <?= e(role_label((string) $member['role'])) ?>
                     </span>
                 </p>
-                <p class="mt-1 text-[11px] text-ink-soft">
+                <p class="mt-1 text-[11px] text-soft">
                     <?= e(number_format((int) $member['post_count'])) ?> posts &middot;
                     joined <?= e(date('M Y', (int) strtotime((string) $member['created_at']))) ?>
                 </p>
-                <p class="text-[11px] text-ink-soft">Seen <?= e(time_ago(isset($member['last_seen_at']) ? (string) $member['last_seen_at'] : null)) ?></p>
+                <p class="text-[11px] text-soft">Seen <?= e(time_ago(isset($member['last_seen_at']) ? (string) $member['last_seen_at'] : null)) ?></p>
             </div>
         </article>
     <?php endforeach; ?>
 </div>
 
 <?php if ($members === []): ?>
-    <div class="panel p-10 text-center text-sm text-ink-soft">No members match that search.</div>
+    <div class="panel p-10 text-center text-sm text-soft">No members match that search.</div>
 <?php endif; ?>
 
 <?php if ($totalPages > 1): ?>
@@ -116,4 +123,4 @@ require __DIR__ . '/includes/header.php';
     </nav>
 <?php endif; ?>
 
-<?php require __DIR__ . '/includes/footer.php'; ?>
+<?php require dirname(__DIR__) . '/includes/footer.php'; ?>

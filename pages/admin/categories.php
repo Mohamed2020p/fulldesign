@@ -5,6 +5,13 @@
 
 declare(strict_types=1);
 
+// This page is a route target, not a public address. It is reached only
+// through the front controller, which has already resolved the request.
+if (!defined('GF_ROUTER')) {
+    http_response_code(404);
+    exit;
+}
+
 require_once __DIR__ . '/layout.php';
 
 $staff  = require_admin();
@@ -31,20 +38,20 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         if ($errors === []) {
             if ($action === 'create') {
                 db_query(
-                    'INSERT INTO categories (name, description, position) VALUES (:n, :d, :p)',
-                    ['n' => $name, 'd' => $description, 'p' => $position]
+                    'INSERT INTO categories (name, slug, description, position) VALUES (:n, :s, :d, :p)',
+                    ['n' => $name, 's' => unique_slug('categories', $name), 'd' => $description, 'p' => $position]
                 );
                 log_admin_action((int) $staff['id'], 'create_category', 'Category "' . $name . '" created.');
                 flash('success', 'The category has been created.');
             } elseif ($id > 0) {
                 db_query(
-                    'UPDATE categories SET name = :n, description = :d, position = :p WHERE id = :id',
-                    ['n' => $name, 'd' => $description, 'p' => $position, 'id' => $id]
+                    'UPDATE categories SET name = :n, slug = :s, description = :d, position = :p WHERE id = :id',
+                    ['n' => $name, 's' => unique_slug('categories', $name, $id), 'd' => $description, 'p' => $position, 'id' => $id]
                 );
                 log_admin_action((int) $staff['id'], 'update_category', 'Category #' . $id . ' updated.');
                 flash('success', 'The category has been updated.');
             }
-            redirect('admin/categories.php');
+            redirect(url('admin/categories'));
         }
     } elseif ($action === 'delete') {
         $id = post_int('id');
@@ -58,7 +65,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 flash('success', 'The category has been deleted.');
             }
         }
-        redirect('admin/categories.php');
+        redirect(url('admin/categories'));
     }
 }
 
@@ -95,13 +102,13 @@ admin_header('Categories', 'Top level groupings shown on the board index.');
                 <div class="flex flex-wrap items-center gap-3 px-4 py-3">
                     <div class="min-w-0 flex-1">
                         <p class="text-sm font-semibold text-ink"><?= e((string) $category['name']) ?></p>
-                        <p class="text-xs text-ink-soft"><?= e((string) $category['description']) ?></p>
+                        <p class="text-xs text-soft"><?= e((string) $category['description']) ?></p>
                     </div>
                     <span class="w-20 text-center text-sm font-semibold text-ink"><?= e((string) (int) $category['board_count']) ?></span>
-                    <span class="w-16 text-center text-sm text-ink-soft"><?= e((string) (int) $category['position']) ?></span>
+                    <span class="w-16 text-center text-sm text-soft"><?= e((string) (int) $category['position']) ?></span>
                     <div class="flex w-32 justify-end gap-1">
-                        <a class="btn btn-ghost btn-sm" href="<?= e(url('admin/categories.php?edit=' . (int) $category['id'])) ?>">Edit</a>
-                        <form method="post" action="<?= e(url('admin/categories.php')) ?>"
+                        <a class="btn btn-ghost btn-sm" href="<?= e(url('admin/categories?edit=' . (int) $category['id'])) ?>">Edit</a>
+                        <form method="post" action="<?= e(url('admin/categories')) ?>"
                               onsubmit="return confirm('Delete this category?');">
                             <?= csrf_field() ?>
                             <input type="hidden" name="action" value="delete">
@@ -112,7 +119,7 @@ admin_header('Categories', 'Top level groupings shown on the board index.');
                 </div>
             <?php endforeach; ?>
             <?php if ($categories === []): ?>
-                <p class="px-4 py-8 text-center text-sm italic text-ink-soft">No categories yet.</p>
+                <p class="px-4 py-8 text-center text-sm italic text-soft">No categories yet.</p>
             <?php endif; ?>
         </div>
     </section>
@@ -122,7 +129,7 @@ admin_header('Categories', 'Top level groupings shown on the board index.');
             <span class="material-icons-outlined text-[18px]" aria-hidden="true"><?= $editing !== null ? 'edit' : 'add' ?></span>
             <?= $editing !== null ? 'Edit category' : 'New category' ?>
         </h2>
-        <form method="post" action="<?= e(url('admin/categories.php')) ?>" class="space-y-4 p-5">
+        <form method="post" action="<?= e(url('admin/categories')) ?>" class="space-y-4 p-5">
             <?= csrf_field() ?>
             <input type="hidden" name="action" value="<?= $editing !== null ? 'update' : 'create' ?>">
             <?php if ($editing !== null): ?>
@@ -151,7 +158,7 @@ admin_header('Categories', 'Top level groupings shown on the board index.');
             <div class="flex gap-2">
                 <button type="submit" class="btn btn-primary"><?= $editing !== null ? 'Save changes' : 'Create category' ?></button>
                 <?php if ($editing !== null): ?>
-                    <a class="btn btn-ghost" href="<?= e(url('admin/categories.php')) ?>">Cancel</a>
+                    <a class="btn btn-ghost" href="<?= e(url('admin/categories')) ?>">Cancel</a>
                 <?php endif; ?>
             </div>
         </form>

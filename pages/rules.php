@@ -5,7 +5,14 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/includes/functions.php';
+// This page is a route target, not a public address. It is reached only
+// through the front controller, which has already resolved the request.
+if (!defined('GF_ROUTER')) {
+    http_response_code(404);
+    exit;
+}
+
+require_once dirname(__DIR__) . '/includes/functions.php';
 
 $pageTitle       = 'Board rules';
 $pageDescription = 'How GodsForum is run.';
@@ -45,13 +52,13 @@ $rules = [
     ],
 ];
 
-require __DIR__ . '/includes/header.php';
+require dirname(__DIR__) . '/includes/header.php';
 ?>
 
 <div class="mx-auto max-w-3xl">
     <div class="mb-5">
         <h1 class="font-serif text-2xl font-semibold text-ink">Board rules</h1>
-        <p class="mt-0.5 text-sm text-ink-soft">
+        <p class="mt-0.5 text-sm text-soft">
             Six lines that keep the hall readable. Registering an account means agreeing to them.
         </p>
     </div>
@@ -66,7 +73,7 @@ require __DIR__ . '/includes/header.php';
                     <h2 class="text-[15px] font-semibold text-ink">
                         <?= e((string) ($index + 1)) ?>. <?= e($rule['title']) ?>
                     </h2>
-                    <p class="mt-1 text-sm leading-relaxed text-ink-soft"><?= e($rule['body']) ?></p>
+                    <p class="mt-1 text-sm leading-relaxed text-soft"><?= e($rule['body']) ?></p>
                 </div>
             </article>
         <?php endforeach; ?>
@@ -77,7 +84,7 @@ require __DIR__ . '/includes/header.php';
             <span class="material-icons-outlined text-[18px]" aria-hidden="true">gavel</span>
             Enforcement
         </h2>
-        <div class="space-y-3 p-5 text-sm leading-relaxed text-ink-soft">
+        <div class="space-y-3 p-5 text-sm leading-relaxed text-soft">
             <p>
                 Minor breaches are handled with an edit and a quiet word. Repeated breaches lead to a locked
                 thread, then to a suspended account. Suspensions are recorded in the staff log with the reason.
@@ -90,4 +97,4 @@ require __DIR__ . '/includes/header.php';
     </section>
 </div>
 
-<?php require __DIR__ . '/includes/footer.php'; ?>
+<?php require dirname(__DIR__) . '/includes/footer.php'; ?>

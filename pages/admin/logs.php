@@ -5,6 +5,13 @@
 
 declare(strict_types=1);
 
+// This page is a route target, not a public address. It is reached only
+// through the front controller, which has already resolved the request.
+if (!defined('GF_ROUTER')) {
+    http_response_code(404);
+    exit;
+}
+
 require_once __DIR__ . '/layout.php';
 
 $staff = require_admin();
@@ -52,23 +59,23 @@ admin_header('Staff log', 'Every moderation action, with who did it and when.');
             </thead>
             <tbody class="divide-rule">
                 <?php foreach ($entries as $entry): ?>
-                    <tr class="align-top transition-colors hover:bg-parchment-dark/40">
-                        <td class="whitespace-nowrap px-4 py-2.5 text-xs text-ink-soft"><?= e(full_date((string) $entry['created_at'])) ?></td>
+                    <tr class="align-top transition-colors hover:">
+                        <td class="whitespace-nowrap px-4 py-2.5 text-xs text-soft"><?= e(full_date((string) $entry['created_at'])) ?></td>
                         <td class="px-4 py-2.5">
                             <?php if ($entry['admin_id'] !== null): ?>
-                                <a class="row-link text-xs" href="<?= e(url('profile.php?id=' . (int) $entry['admin_id'])) ?>"><?= e((string) $entry['username']) ?></a>
+                                <a class="row-link text-xs" href="<?= e(member_url((string) $entry['username'])) ?>"><?= e((string) $entry['username']) ?></a>
                             <?php else: ?>
-                                <span class="text-xs italic text-ink-soft">removed account</span>
+                                <span class="text-xs italic text-soft">removed account</span>
                             <?php endif; ?>
-                            <p class="text-[11px] text-ink-soft"><?= e((string) $entry['ip_address']) ?></p>
+                            <p class="text-[11px] text-soft"><?= e((string) $entry['ip_address']) ?></p>
                         </td>
                         <td class="px-4 py-2.5"><span class="tag"><?= e((string) $entry['action']) ?></span></td>
-                        <td class="px-4 py-2.5 text-xs text-ink-soft"><?= e((string) $entry['details']) ?></td>
+                        <td class="px-4 py-2.5 text-xs text-soft"><?= e((string) $entry['details']) ?></td>
                     </tr>
                 <?php endforeach; ?>
 
                 <?php if ($entries === []): ?>
-                    <tr><td colspan="4" class="px-4 py-8 text-center text-sm italic text-ink-soft">No staff actions recorded yet.</td></tr>
+                    <tr><td colspan="4" class="px-4 py-8 text-center text-sm italic text-soft">No staff actions recorded yet.</td></tr>
                 <?php endif; ?>
             </tbody>
         </table>
@@ -84,7 +91,7 @@ admin_header('Staff log', 'Every moderation action, with who did it and when.');
                 <li class="flex items-center justify-between gap-2 px-4 py-2">
                     <div class="min-w-0">
                         <p class="truncate font-medium text-ink"><?= e((string) $attempt['identifier']) ?></p>
-                        <p class="text-ink-soft"><?= e((string) $attempt['ip_address']) ?> &middot; <?= e(time_ago((string) $attempt['attempted_at'])) ?></p>
+                        <p class="text-soft"><?= e((string) $attempt['ip_address']) ?> &middot; <?= e(time_ago((string) $attempt['attempted_at'])) ?></p>
                     </div>
                     <span class="<?= (int) $attempt['success'] === 1 ? 'tag tag-forest' : 'tag tag-crimson' ?>">
                         <?= (int) $attempt['success'] === 1 ? 'Success' : 'Failed' ?>
@@ -92,7 +99,7 @@ admin_header('Staff log', 'Every moderation action, with who did it and when.');
                 </li>
             <?php endforeach; ?>
             <?php if ($attempts === []): ?>
-                <li class="px-4 py-6 text-center italic text-ink-soft">No attempts recorded.</li>
+                <li class="px-4 py-6 text-center italic text-soft">No attempts recorded.</li>
             <?php endif; ?>
         </ul>
     </section>
@@ -101,7 +108,7 @@ admin_header('Staff log', 'Every moderation action, with who did it and when.');
 <?php if ($totalPages > 1): ?>
     <nav aria-label="Pagination" class="mt-5 flex flex-wrap items-center justify-center gap-1">
         <?php foreach (page_window($page, $totalPages, 3) as $p): ?>
-            <a class="btn btn-sm <?= $p === $page ? 'btn-primary' : 'btn-ghost' ?>" href="<?= e(url('admin/logs.php?page=' . $p)) ?>"><?= e((string) $p) ?></a>
+            <a class="btn btn-sm <?= $p === $page ? 'btn-primary' : 'btn-ghost' ?>" href="<?= e(url('admin/logs?page=' . $p)) ?>"><?= e((string) $p) ?></a>
         <?php endforeach; ?>
     </nav>
 <?php endif; ?>

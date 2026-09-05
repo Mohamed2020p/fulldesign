@@ -5,6 +5,13 @@
 
 declare(strict_types=1);
 
+// This page is a route target, not a public address. It is reached only
+// through the front controller, which has already resolved the request.
+if (!defined('GF_ROUTER')) {
+    http_response_code(404);
+    exit;
+}
+
 require_once __DIR__ . '/layout.php';
 
 $staff  = require_admin();
@@ -46,23 +53,25 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         if ($errors === []) {
             if ($action === 'create') {
                 db_query(
-                    'INSERT INTO boards (category_id, name, description, icon, position, is_locked)
-                     VALUES (:c, :n, :d, :i, :p, :l)',
-                    ['c' => $categoryId, 'n' => $name, 'd' => $description, 'i' => $icon, 'p' => $position, 'l' => $isLocked]
+                    'INSERT INTO boards (category_id, name, slug, description, icon, position, is_locked)
+                     VALUES (:c, :n, :s, :d, :i, :p, :l)',
+                    ['c' => $categoryId, 'n' => $name, 's' => unique_slug('boards', $name),
+                     'd' => $description, 'i' => $icon, 'p' => $position, 'l' => $isLocked]
                 );
                 log_admin_action((int) $staff['id'], 'create_board', 'Board "' . $name . '" created.');
                 flash('success', 'The board has been created.');
             } elseif ($id > 0) {
                 db_query(
-                    'UPDATE boards SET category_id = :c, name = :n, description = :d, icon = :i,
+                    'UPDATE boards SET category_id = :c, name = :n, slug = :s, description = :d, icon = :i,
                             position = :p, is_locked = :l
                       WHERE id = :id',
-                    ['c' => $categoryId, 'n' => $name, 'd' => $description, 'i' => $icon, 'p' => $position, 'l' => $isLocked, 'id' => $id]
+                    ['c' => $categoryId, 'n' => $name, 's' => unique_slug('boards', $name, $id),
+                     'd' => $description, 'i' => $icon, 'p' => $position, 'l' => $isLocked, 'id' => $id]
                 );
                 log_admin_action((int) $staff['id'], 'update_board', 'Board #' . $id . ' updated.');
                 flash('success', 'The board has been updated.');
             }
-            redirect('admin/boards.php');
+            redirect(url('admin/boards'));
         }
     } elseif ($action === 'delete') {
         $id = post_int('id');
@@ -71,7 +80,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
             log_admin_action((int) $staff['id'], 'delete_board', 'Board #' . $id . ' deleted with all its topics.');
             flash('success', 'The board and every topic inside it have been deleted.');
         }
-        redirect('admin/boards.php');
+        redirect(url('admin/boards'));
     }
 }
 
@@ -119,13 +128,13 @@ admin_header('Boards', 'Individual discussion boards and where they belong.');
                             <?= e((string) $board['name']) ?>
                             <?php if ((int) $board['is_locked'] === 1): ?><span class="tag tag-crimson ml-1">Locked</span><?php endif; ?>
                         </p>
-                        <p class="text-xs text-ink-soft"><?= e((string) $board['category_name']) ?> &middot; <?= e(excerpt((string) $board['description'], 70)) ?></p>
+                        <p class="text-xs text-soft"><?= e((string) $board['category_name']) ?> &middot; <?= e(excerpt((string) $board['description'], 70)) ?></p>
                     </div>
                     <span class="hidden w-24 text-center text-sm font-semibold text-ink sm:block"><?= e((string) (int) $board['topic_count']) ?></span>
-                    <span class="hidden w-16 text-center text-sm text-ink-soft sm:block"><?= e((string) (int) $board['position']) ?></span>
+                    <span class="hidden w-16 text-center text-sm text-soft sm:block"><?= e((string) (int) $board['position']) ?></span>
                     <div class="flex w-32 justify-end gap-1">
-                        <a class="btn btn-ghost btn-sm" href="<?= e(url('admin/boards.php?edit=' . (int) $board['id'])) ?>">Edit</a>
-                        <form method="post" action="<?= e(url('admin/boards.php')) ?>"
+                        <a class="btn btn-ghost btn-sm" href="<?= e(url('admin/boards?edit=' . (int) $board['id'])) ?>">Edit</a>
+                        <form method="post" action="<?= e(url('admin/boards')) ?>"
                               onsubmit="return confirm('Delete this board and every topic in it?');">
                             <?= csrf_field() ?>
                             <input type="hidden" name="action" value="delete">
@@ -136,7 +145,7 @@ admin_header('Boards', 'Individual discussion boards and where they belong.');
                 </div>
             <?php endforeach; ?>
             <?php if ($boards === []): ?>
-                <p class="px-4 py-8 text-center text-sm italic text-ink-soft">No boards yet.</p>
+                <p class="px-4 py-8 text-center text-sm italic text-soft">No boards yet.</p>
             <?php endif; ?>
         </div>
     </section>
@@ -146,7 +155,7 @@ admin_header('Boards', 'Individual discussion boards and where they belong.');
             <span class="material-icons-outlined text-[18px]" aria-hidden="true"><?= $editing !== null ? 'edit' : 'add' ?></span>
             <?= $editing !== null ? 'Edit board' : 'New board' ?>
         </h2>
-        <form method="post" action="<?= e(url('admin/boards.php')) ?>" class="space-y-4 p-5">
+        <form method="post" action="<?= e(url('admin/boards')) ?>" class="space-y-4 p-5">
             <?= csrf_field() ?>
             <input type="hidden" name="action" value="<?= $editing !== null ? 'update' : 'create' ?>">
             <?php if ($editing !== null): ?>
@@ -204,7 +213,7 @@ admin_header('Boards', 'Individual discussion boards and where they belong.');
             <div class="flex gap-2">
                 <button type="submit" class="btn btn-primary"><?= $editing !== null ? 'Save changes' : 'Create board' ?></button>
                 <?php if ($editing !== null): ?>
-                    <a class="btn btn-ghost" href="<?= e(url('admin/boards.php')) ?>">Cancel</a>
+                    <a class="btn btn-ghost" href="<?= e(url('admin/boards')) ?>">Cancel</a>
                 <?php endif; ?>
             </div>
         </form>

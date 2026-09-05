@@ -12,37 +12,80 @@ Threads stay where you left them.
 
 **Public forum**
 
-| Page | File | Purpose |
-| --- | --- | --- |
-| Board index | `index.php` | Categories, boards, last post per board, live statistics |
-| Board | `board.php` | Paginated topic list with pinned and locked markers |
-| Topic | `topic.php` | Paginated posts, author cards, signatures, quick reply |
-| New topic | `new_topic.php` | Opens a discussion in a board |
-| Edit post | `edit_post.php` | Author or staff editing, with an "edited" marker |
-| Report | `report.php` | Sends a post to the staff queue |
-| Recent | `recent.php` | Newest activity across every board |
-| Members | `members.php` | Searchable, sortable member directory |
-| Profile | `profile.php` | Public profile plus avatar, signature and password settings |
-| Search | `search.php` | Searches titles, post bodies, or both |
-| Rules | `rules.php` | The six board rules and how they are enforced |
-| Sign in / Register / Sign out | `login.php`, `register.php`, `logout.php` | Account handling |
+Every address is readable. No page ever exposes a `.php` extension or a
+numeric query string.
+
+| Address | Purpose |
+| --- | --- |
+| `/` | Categories, boards, last post per board, live statistics |
+| `/board/general-talk` | Paginated topic list with pinned and locked markers |
+| `/board/general-talk/page/2` | Any later page of a board |
+| `/board/general-talk/new` | Opens a discussion in that board |
+| `/topic/welcome-to-godsforum` | Paginated posts, author cards, signatures, quick reply |
+| `/topic/welcome-to-godsforum/page/3` | Any later page of a topic |
+| `/post/rf6u4goctnid/edit` | Author or staff editing, with an "edited" marker |
+| `/post/rf6u4goctnid/report` | Sends a post to the staff queue |
+| `/member/hermes` | Public profile plus avatar, signature and password settings |
+| `/recent` | Newest activity across every board |
+| `/members` | Searchable, sortable member directory |
+| `/search` | Searches titles, post bodies, or both |
+| `/appearance` | Lets a member choose the theme the board is drawn in |
+| `/rules` | The six board rules and how they are enforced |
+| `/login`, `/register`, `/logout` | Account handling |
+
+Boards and topics are addressed by slug, members by username, and posts by a
+random twelve character reference. No row identifier is ever published, so the
+address space cannot be walked and no internal numbering is disclosed.
 
 **Admin control room** (`/admin`, staff only)
 
-| Page | Purpose |
-| --- | --- |
-| `admin/index.php` | Dashboard: counts, open reports, newest members, latest posts |
-| `admin/categories.php` | Create, edit, reorder and delete categories |
-| `admin/boards.php` | Create, edit, move, lock and delete boards |
-| `admin/topics.php` | Pin, lock, move between boards, delete topics |
-| `admin/posts.php` | Search, edit and delete any post |
-| `admin/reports.php` | Report queue with resolve, reopen and delete actions |
-| `admin/users.php` | Roles, suspensions and account deletion |
-| `admin/settings.php` | Board name, tagline, welcome text, registration switch |
-| `admin/logs.php` | Audit trail of every staff action and recent sign in attempts |
+The public board is deliberately old school. The control room is not: it has a
+modern interface with a dark fixed sidebar, grouped navigation, statistic
+tiles, soft rounded surfaces and a quiet indigo accent.
 
-Moderators see everything except **Settings** and **Staff log**, which are
-reserved for administrators.
+| Address | Purpose |
+| --- | --- |
+| `/admin` | Dashboard: counts, open reports, newest members, latest posts |
+| `/admin/categories` | Create, edit, reorder and delete categories |
+| `/admin/boards` | Create, edit, move, lock and delete boards |
+| `/admin/topics` | Pin, lock, move between boards, delete topics |
+| `/admin/posts` | Search, edit and delete any post |
+| `/admin/reports` | Report queue with resolve, reopen and delete actions |
+| `/admin/members` | Roles, **bans**, filters and account deletion |
+| `/admin/appearance` | Board theme, member theme permission, bulk reset |
+| `/admin/settings` | Board name, tagline, welcome text, registration switch |
+| `/admin/logs` | Audit trail of every staff action and recent sign in attempts |
+
+Moderators see everything except **Appearance**, **Settings** and **Staff
+log**, which are reserved for administrators.
+
+**Banning members**
+
+From `/admin/members` a staff member can suspend any account with a reason and
+a length: permanent, one day, three days, one week, thirty days or ninety
+days. The reason and the expiry are shown to the member on the sign in screen,
+so a suspension is never silent. A timed suspension lifts itself the moment it
+expires, both at sign in and on the next page view of an open session, so
+staff never have to come back and undo it. Every suspension is written to a
+`bans` history table that survives reinstatement, and `/admin/members?show=banned`
+lists everyone currently suspended.
+
+**Themes**
+
+Eight themes ship with the board, grouped into three families:
+
+| Family | Themes |
+| --- | --- |
+| Classic | Parchment, Midnight, Ember, Forest |
+| Modern | Slate, Aurora, Sandstone |
+| Accessible | High contrast |
+
+A theme is a set of CSS custom properties selected by a `data-theme` attribute
+on the `<html>` element. The markup, the layout and the stylesheet are
+identical in every theme, so switching costs nothing and cannot break a page.
+Administrators set the board theme at `/admin/appearance`; members override it
+for their own account at `/appearance`, unless the administrator turns member
+choice off.
 
 ---
 
@@ -135,6 +178,7 @@ Open the site and sign in with a seeded account.
 
 | Username | Role | Password |
 | --- | --- | --- |
+| `admin` | Administrator, full privileges | `admin` |
 | `zeus` | Administrator | `Password123!` |
 | `athena` | Moderator | `Password123!` |
 | `hermes`, `hestia`, `prometheus` | Member | `Password123!` |
@@ -148,11 +192,38 @@ Open the site and sign in with a seeded account.
 
 The forum was written defensively from the first line.
 
-**SQL injection** — every database call goes through `includes/db.php`, which
-prepares the statement and binds each value with an explicit PDO type.
-`PDO::ATTR_EMULATE_PREPARES` is off, so the server does the parameterising.
-User input is never concatenated into SQL; even `LIKE` searches escape `%`
-and `_` before binding.
+**SQL injection, every class of it** — every database call goes through
+`includes/db.php`, which prepares the statement and binds each value with an
+explicit PDO type. `PDO::ATTR_EMULATE_PREPARES` is off, so the database server
+does the parameterising and a value can never be re-read as syntax. User input
+is never concatenated into SQL; even `LIKE` searches escape `%` and `_` before
+binding. Where a query needs a variable *fragment* rather than a value — a
+sort column, a status filter, a table name for slug generation — the request
+selects a key in a fixed whitelist and the code emits its own literal, so the
+input never reaches the query text at all.
+
+This closes classic, blind boolean and time based (`SLEEP`) injection
+together, because none of them have an insertion point to work with. Two
+further rules make sure nothing leaks even so:
+
+- **Nothing hints that an injection point exists.** Slugs, usernames and post
+  references are constrained by the router before a query runs, and a value
+  that matches no row produces the same ordinary 404 page as any other missing
+  address — byte for byte identical, whatever the payload was. There is no
+  error text, no different status, no different length and no timing
+  difference to compare, so a blind attacker gets no oracle to work from.
+- **Database errors never reach the browser.** `DEBUG_MODE` is off in
+  production, PDO is set to throw, and the handler logs the exception server
+  side and shows a generic page. `SQLSTATE` codes, driver messages and query
+  fragments are never rendered.
+
+**Transport security** — when the request arrives over TLS the board sends
+`Strict-Transport-Security: max-age=31536000; includeSubDomains`, pinning the
+browser to HTTPS for a year so a later plain HTTP link cannot be stripped or
+intercepted. The header is deliberately withheld on plain HTTP, because a
+browser must ignore it there and sending it before the site is fully on TLS
+would lock visitors out. Set `GF_HTTPS=true` and session cookies are marked
+`Secure` as well as `HttpOnly` and `SameSite=Lax`.
 
 **Cross site request forgery** — `csrf_token()` puts a 64 character random
 token in the session, `csrf_field()` prints it into every form, and
@@ -201,15 +272,22 @@ description, the IP address and a timestamp.
 
 ## Database
 
-Eight InnoDB tables in `utf8mb4`, with foreign keys, indexes on every join and
-sort column, and full text indexes on titles and post bodies.
+Ten InnoDB tables in `utf8mb4`, with foreign keys, indexes on every join and
+sort column, unique indexes on every slug, and full text indexes on titles and
+post bodies.
 
 ```
 categories ──< boards ──< topics ──< posts ──< reports
                             │         │
                             └── users ┘
+                                  │
+                                 bans
 login_attempts     admin_log     settings
 ```
+
+`categories`, `boards` and `topics` each carry a unique `slug`, and `posts`
+carries a unique random `ref`. These are what appear in addresses. `users`
+carries `theme`, `ban_reason`, `banned_until` and `banned_by`.
 
 Deleting a category, board or topic cascades to the content below it. Deleting
 a member sets their posts to `NULL`, so history stays readable and the author
@@ -232,15 +310,23 @@ PHP host with no Node.js installed.
 
 ### Verification performed on this codebase
 
-- All 30 PHP files parse without a syntax error.
+- All 35 PHP files parse without a syntax error.
 - The stylesheet passes stylelint and every declaration parses against the CSS
   specification with css-tree.
 - Rendered HTML from all public and admin pages passes `html-validate`.
-- An 81 check integration suite exercised every page and every form: guest
+- A 120 check integration suite exercised every page and every form: guest
   browsing, sign in and sign out, registration validation, posting, replying,
-  editing, reporting, all nine admin screens, all moderation actions,
-  permission boundaries, CSRF rejection, SQL injection attempts and XSS
-  escaping. All 81 checks pass.
+  editing, reporting, all ten admin screens, all moderation actions,
+  permission boundaries, CSRF rejection, XSS escaping, theme selection, the
+  full ban lifecycle, and clean URL routing. All 120 checks pass.
+- Every rendered page was scanned for links: no public page emits a `.php`
+  extension or a `?id=` style query string anywhere.
+- Seven injection probes covering boolean, union and time based payloads
+  (including `SLEEP`) were fired at the topic, board, member and post routes.
+  Each returned an ordinary 404 in under a second, and the 404 body for a
+  crafted slug is byte for byte identical to the 404 for a plain miss.
+- The whole board was deployed into a subfolder and re-tested: all 171 local
+  URLs across seven pages resolved against the install folder.
 
 ---
 
@@ -248,27 +334,34 @@ PHP host with no Node.js installed.
 
 ```
 .
-├── index.php               board index
-├── board.php               topic list
-├── topic.php               posts and reply form
-├── new_topic.php           create a topic
-├── edit_post.php           edit a post
-├── report.php              report a post
-├── recent.php              recent activity
-├── members.php             member directory
-├── profile.php             profile and account settings
-├── search.php              search
-├── rules.php               board rules
-├── login.php  register.php  logout.php
-├── admin/
-│   ├── layout.php          control room shell
-│   ├── index.php           dashboard
-│   ├── categories.php  boards.php  topics.php  posts.php
-│   ├── reports.php     users.php   settings.php  logs.php
+├── router.php              front controller: maps clean URLs to pages
+├── index.php               hands the request to router.php
+├── .htaccess               rewrite rules, security headers, file denials
+├── pages/                  route targets, never addressed directly
+│   ├── index.php           board index
+│   ├── board.php           topic list
+│   ├── topic.php           posts and reply form
+│   ├── new_topic.php       create a topic
+│   ├── edit_post.php       edit a post
+│   ├── report.php          report a post
+│   ├── recent.php          recent activity
+│   ├── members.php         member directory
+│   ├── profile.php         profile and account settings
+│   ├── search.php          search
+│   ├── appearance.php      member theme picker
+│   ├── rules.php           board rules
+│   ├── login.php  register.php  logout.php
+│   └── admin/
+│       ├── layout.php      control room shell, modern interface
+│       ├── index.php       dashboard
+│       ├── categories.php  boards.php  topics.php  posts.php
+│       ├── reports.php     users.php   appearance.php
+│       └── settings.php    logs.php
 ├── includes/
 │   ├── config.php          configuration constants
 │   ├── db.php              PDO layer, prepared statements only
-│   ├── functions.php       sessions, CSRF, escaping, auth, helpers
+│   ├── functions.php       sessions, CSRF, escaping, auth, URL builders
+│   ├── themes.php          the theme catalogue and resolution
 │   ├── header.php          public header
 │   └── footer.php          public footer
 ├── assets/

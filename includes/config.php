@@ -8,6 +8,14 @@
 
 declare(strict_types=1);
 
+// Defence in depth. Apache already denies this directory, but if a server is
+// misconfigured these files must still refuse to run as a request target.
+if (!defined('GF_ROUTER') && PHP_SAPI !== 'cli' && realpath(__FILE__) === realpath((string) ($_SERVER['SCRIPT_FILENAME'] ?? ''))) {
+    http_response_code(404);
+    exit;
+}
+
+
 // ---------------------------------------------------------------------------
 // Database
 // ---------------------------------------------------------------------------

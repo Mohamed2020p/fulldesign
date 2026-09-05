@@ -5,33 +5,35 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/includes/functions.php';
-
-$user    = require_login();
-$boardId = param_int('board');
-
-$board = $boardId > 0
-    ? db_one(
-        'SELECT b.id, b.name, b.is_locked, c.name AS category_name
-           FROM boards b JOIN categories c ON c.id = b.category_id
-          WHERE b.id = :id LIMIT 1',
-        ['id' => $boardId]
-    )
-    : null;
-
-if ($board === null) {
+// This page is a route target, not a public address. It is reached only
+// through the front controller, which has already resolved the request.
+if (!defined('GF_ROUTER')) {
     http_response_code(404);
-    $pageTitle = 'Board not found';
-    require __DIR__ . '/includes/header.php';
-    echo '<div class="panel p-10 text-center"><h1 class="font-serif text-xl text-ink">Board not found</h1>'
-       . '<a class="btn btn-primary mt-5" href="' . e(url('index.php')) . '">Back to board index</a></div>';
-    require __DIR__ . '/includes/footer.php';
     exit;
 }
 
+require_once dirname(__DIR__) . '/includes/functions.php';
+
+$user = require_login();
+
+/** @var array<string, string> $route */
+$board = db_one(
+    'SELECT b.id, b.name, b.slug, b.is_locked, c.name AS category_name
+       FROM boards b JOIN categories c ON c.id = b.category_id
+      WHERE b.slug = :slug LIMIT 1',
+    ['slug' => (string) ($route['slug'] ?? '')]
+);
+
+if ($board === null) {
+    router_not_found();
+}
+
+$boardId  = (int) $board['id'];
+$boardUrl = board_url((string) $board['slug']);
+
 if ((int) $board['is_locked'] === 1 && !is_admin()) {
     flash('error', 'That board is locked, new topics cannot be created there.');
-    redirect('board.php?id=' . $boardId);
+    redirect($boardUrl);
 }
 
 $errors = [];
@@ -67,15 +69,17 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         $pdo->beginTransaction();
 
         try {
+            $topicSlug = unique_slug('topics', $title);
+
             db_query(
-                'INSERT INTO topics (board_id, user_id, title) VALUES (:b, :u, :t)',
-                ['b' => $boardId, 'u' => (int) $user['id'], 't' => $title]
+                'INSERT INTO topics (board_id, user_id, title, slug) VALUES (:b, :u, :t, :s)',
+                ['b' => $boardId, 'u' => (int) $user['id'], 't' => $title, 's' => $topicSlug]
             );
             $topicId = db_insert_id();
 
             db_query(
-                'INSERT INTO posts (topic_id, user_id, body, ip_address) VALUES (:t, :u, :b, :ip)',
-                ['t' => $topicId, 'u' => (int) $user['id'], 'b' => $body, 'ip' => client_ip()]
+                'INSERT INTO posts (ref, topic_id, user_id, body, ip_address) VALUES (:r, :t, :u, :b, :ip)',
+                ['r' => generate_ref(), 't' => $topicId, 'u' => (int) $user['id'], 'b' => $body, 'ip' => client_ip()]
             );
 
             $pdo->commit();
@@ -88,7 +92,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         recount_user_posts((int) $user['id']);
 
         flash('success', 'Your topic has been created.');
-        redirect(topic_url($topicId, $title));
+        redirect(topic_url($topicSlug));
     }
 }
 
@@ -96,11 +100,11 @@ $pageTitle       = 'New topic';
 $pageDescription = 'Start a new topic in ' . (string) $board['name'];
 $breadcrumbs     = [
     ['label' => (string) $board['category_name']],
-    ['label' => (string) $board['name'], 'url' => url('board.php?id=' . $boardId)],
+    ['label' => (string) $board['name'], 'url' => $boardUrl],
     ['label' => 'New topic'],
 ];
 
-require __DIR__ . '/includes/header.php';
+require dirname(__DIR__) . '/includes/header.php';
 ?>
 
 <div class="mx-auto max-w-3xl">
@@ -114,7 +118,7 @@ require __DIR__ . '/includes/header.php';
             <?= csrf_field() ?>
 
             <?php if ($errors !== []): ?>
-                <div class="border-l-4 border-crimson bg-crimson/10 px-3 py-2 text-sm text-crimson">
+                <div class="alert alert-error">
                     <ul class="list-inside list-disc space-y-1">
                         <?php foreach ($errors as $error): ?>
                             <li><?= e($error) ?></li>
@@ -144,10 +148,10 @@ require __DIR__ . '/includes/header.php';
                     <span class="material-icons-outlined text-[18px]" aria-hidden="true">send</span>
                     Publish topic
                 </button>
-                <a class="btn btn-ghost" href="<?= e(url('board.php?id=' . $boardId)) ?>">Cancel</a>
+                <a class="btn btn-ghost" href="<?= e($boardUrl) ?>">Cancel</a>
             </div>
         </form>
     </section>
 </div>
 
-<?php require __DIR__ . '/includes/footer.php'; ?>
+<?php require dirname(__DIR__) . '/includes/footer.php'; ?>

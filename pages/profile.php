@@ -5,32 +5,30 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/includes/functions.php';
-
-$viewer    = current_user();
-$profileId = param_int('id');
-
-if ($profileId === 0 && $viewer !== null) {
-    $profileId = (int) $viewer['id'];
-}
-
-$profile = $profileId > 0
-    ? db_one(
-        'SELECT id, username, role, status, signature, avatar, post_count, created_at, last_seen_at
-           FROM users WHERE id = :id LIMIT 1',
-        ['id' => $profileId]
-    )
-    : null;
-
-if ($profile === null) {
+// This page is a route target, not a public address. It is reached only
+// through the front controller, which has already resolved the request.
+if (!defined('GF_ROUTER')) {
     http_response_code(404);
-    $pageTitle = 'Member not found';
-    require __DIR__ . '/includes/header.php';
-    echo '<div class="panel p-10 text-center"><h1 class="font-serif text-xl text-ink">Member not found</h1>'
-       . '<a class="btn btn-primary mt-5" href="' . e(url('members.php')) . '">Back to the member list</a></div>';
-    require __DIR__ . '/includes/footer.php';
     exit;
 }
+
+require_once dirname(__DIR__) . '/includes/functions.php';
+
+$viewer = current_user();
+
+/** @var array<string, string> $route */
+$profile = db_one(
+    'SELECT id, username, role, status, signature, avatar, post_count, created_at, last_seen_at
+       FROM users WHERE username = :name LIMIT 1',
+    ['name' => (string) ($route['username'] ?? '')]
+);
+
+if ($profile === null) {
+    router_not_found();
+}
+
+$profileId  = (int) $profile['id'];
+$profileUrl = member_url((string) $profile['username']);
 
 $isOwner = $viewer !== null && (int) $viewer['id'] === (int) $profile['id'];
 $errors  = [];
@@ -57,7 +55,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         } else {
             db_query('UPDATE users SET signature = :s WHERE id = :id', ['s' => $signature, 'id' => $profileId]);
             flash('success', 'Your signature has been saved.');
-            redirect('profile.php?id=' . $profileId);
+            redirect($profileUrl);
         }
     } elseif ($action === 'password') {
         $current = (string) ($_POST['current_password'] ?? '');
@@ -78,7 +76,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
                 ['p' => password_hash($new, PASSWORD_DEFAULT), 'id' => $profileId]
             );
             flash('success', 'Your password has been changed.');
-            redirect('profile.php?id=' . $profileId);
+            redirect($profileUrl);
         }
     } elseif ($action === 'avatar') {
         $file = $_FILES['avatar'] ?? null;
@@ -122,7 +120,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 
                     db_query('UPDATE users SET avatar = :a WHERE id = :id', ['a' => $filename, 'id' => $profileId]);
                     flash('success', 'Your avatar has been updated.');
-                    redirect('profile.php?id=' . $profileId);
+                    redirect($profileUrl);
                 }
             }
         }
@@ -130,7 +128,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
 }
 
 $recentTopics = db_all(
-    'SELECT t.id, t.title, t.created_at, t.reply_count, b.name AS board_name
+    'SELECT t.id, t.title, t.slug, t.created_at, t.reply_count, b.name AS board_name
        FROM topics t JOIN boards b ON b.id = t.board_id
       WHERE t.user_id = :u
       ORDER BY t.created_at DESC LIMIT 8',
@@ -138,7 +136,7 @@ $recentTopics = db_all(
 );
 
 $recentPosts = db_all(
-    'SELECT p.id, p.body, p.created_at, t.id AS topic_id, t.title AS topic_title
+    'SELECT p.id, p.body, p.created_at, t.id AS topic_id, t.title AS topic_title, t.slug AS topic_slug
        FROM posts p JOIN topics t ON t.id = p.topic_id
       WHERE p.user_id = :u
       ORDER BY p.created_at DESC LIMIT 8',
@@ -148,15 +146,15 @@ $recentPosts = db_all(
 $pageTitle   = (string) $profile['username'];
 $pageDescription = 'Profile of ' . (string) $profile['username'];
 $breadcrumbs = [
-    ['label' => 'Members', 'url' => url('members.php')],
+    ['label' => 'Members', 'url' => url('members')],
     ['label' => (string) $profile['username']],
 ];
 
-require __DIR__ . '/includes/header.php';
+require dirname(__DIR__) . '/includes/header.php';
 ?>
 
 <?php if ($errors !== []): ?>
-    <div class="mb-4 border-l-4 border-crimson bg-crimson/10 px-4 py-3 text-sm text-crimson">
+    <div class="alert alert-error mb-4">
         <ul class="list-inside list-disc space-y-1">
             <?php foreach ($errors as $error): ?><li><?= e($error) ?></li><?php endforeach; ?>
         </ul>
@@ -172,8 +170,8 @@ require __DIR__ . '/includes/header.php';
             </h1>
             <div class="p-5 text-center">
                 <img src="<?= e(avatar_url(isset($profile['avatar']) ? (string) $profile['avatar'] : null)) ?>" alt=""
-                     class="mx-auto h-24 w-24 border border-rule bg-parchment-dark object-cover">
-                <h2 class="mt-3 font-serif text-xl font-semibold text-ink"><?= e((string) $profile['username']) ?></h2>
+                     class="mx-auto h-24 w-24 border border-rule object-cover" style="background-color: var(--page-alt)">
+                <h2 class="mt-3 font-serif text-xl font-semibold"><?= e((string) $profile['username']) ?></h2>
                 <p class="mt-1">
                     <span class="<?= $profile['role'] === 'admin' ? 'tag tag-crimson' : ($profile['role'] === 'moderator' ? 'tag tag-forest' : 'tag') ?>">
                         <?= e(role_label((string) $profile['role'])) ?>
@@ -184,7 +182,7 @@ require __DIR__ . '/includes/header.php';
                 </p>
 
                 <?php if ((string) $profile['signature'] !== ''): ?>
-                    <p class="mt-3 border-t border-dashed border-rule pt-3 text-xs italic text-ink-soft">
+                    <p class="mt-3 border-t border-dashed border-rule pt-3 text-xs italic text-soft">
                         <?= e((string) $profile['signature']) ?>
                     </p>
                 <?php endif; ?>
@@ -192,16 +190,16 @@ require __DIR__ . '/includes/header.php';
 
             <dl class="divide-rule border-t border-rule text-sm">
                 <div class="flex justify-between px-5 py-2">
-                    <dt class="text-ink-soft">Posts</dt>
-                    <dd class="font-semibold text-ink"><?= e(number_format((int) $profile['post_count'])) ?></dd>
+                    <dt class="text-soft">Posts</dt>
+                    <dd class="font-semibold"><?= e(number_format((int) $profile['post_count'])) ?></dd>
                 </div>
                 <div class="flex justify-between px-5 py-2">
-                    <dt class="text-ink-soft">Joined</dt>
-                    <dd class="font-semibold text-ink"><?= e(date('j M Y', (int) strtotime((string) $profile['created_at']))) ?></dd>
+                    <dt class="text-soft">Joined</dt>
+                    <dd class="font-semibold"><?= e(date('j M Y', (int) strtotime((string) $profile['created_at']))) ?></dd>
                 </div>
                 <div class="flex justify-between px-5 py-2">
-                    <dt class="text-ink-soft">Last seen</dt>
-                    <dd class="font-semibold text-ink"><?= e(time_ago(isset($profile['last_seen_at']) ? (string) $profile['last_seen_at'] : null)) ?></dd>
+                    <dt class="text-soft">Last seen</dt>
+                    <dd class="font-semibold"><?= e(time_ago(isset($profile['last_seen_at']) ? (string) $profile['last_seen_at'] : null)) ?></dd>
                 </div>
             </dl>
         </section>
@@ -212,7 +210,7 @@ require __DIR__ . '/includes/header.php';
                     <span class="material-icons-outlined text-[18px]" aria-hidden="true">image</span>
                     Change avatar
                 </h2>
-                <form method="post" action="<?= e(url('profile.php?id=' . $profileId)) ?>" enctype="multipart/form-data" class="space-y-3 p-5">
+                <form method="post" action="<?= e($profileUrl) ?>" enctype="multipart/form-data" class="space-y-3 p-5">
                     <?= csrf_field() ?>
                     <input type="hidden" name="action" value="avatar">
                     <div>
@@ -236,7 +234,7 @@ require __DIR__ . '/includes/header.php';
                     <span class="material-icons-outlined text-[18px]" aria-hidden="true">draw</span>
                     Signature
                 </h2>
-                <form method="post" action="<?= e(url('profile.php?id=' . $profileId)) ?>" class="space-y-3 p-5">
+                <form method="post" action="<?= e($profileUrl) ?>" class="space-y-3 p-5">
                     <?= csrf_field() ?>
                     <input type="hidden" name="action" value="signature">
                     <div>
@@ -257,7 +255,7 @@ require __DIR__ . '/includes/header.php';
                     <span class="material-icons-outlined text-[18px]" aria-hidden="true">password</span>
                     Change password
                 </h2>
-                <form method="post" action="<?= e(url('profile.php?id=' . $profileId)) ?>" class="grid gap-4 p-5 sm:grid-cols-3">
+                <form method="post" action="<?= e($profileUrl) ?>" class="grid gap-4 p-5 sm:grid-cols-3">
                     <?= csrf_field() ?>
                     <input type="hidden" name="action" value="password">
                     <div>
@@ -290,10 +288,10 @@ require __DIR__ . '/includes/header.php';
             <ul class="divide-rule">
                 <?php foreach ($recentTopics as $topic): ?>
                     <li class="px-4 py-2.5">
-                        <a class="row-link text-sm" href="<?= e(topic_url((int) $topic['id'], (string) $topic['title'])) ?>">
+                        <a class="row-link text-sm" href="<?= e(topic_url((string) $topic['slug'])) ?>">
                             <?= e((string) $topic['title']) ?>
                         </a>
-                        <p class="mt-0.5 text-xs text-ink-soft">
+                        <p class="mt-0.5 text-xs text-soft">
                             <?= e((string) $topic['board_name']) ?> &middot;
                             <?= e(number_format((int) $topic['reply_count'])) ?> replies &middot;
                             <?= e(time_ago((string) $topic['created_at'])) ?>
@@ -301,7 +299,7 @@ require __DIR__ . '/includes/header.php';
                     </li>
                 <?php endforeach; ?>
                 <?php if ($recentTopics === []): ?>
-                    <li class="px-4 py-6 text-center text-sm italic text-ink-soft">No topics started yet.</li>
+                    <li class="px-4 py-6 text-center text-sm italic text-soft">No topics started yet.</li>
                 <?php endif; ?>
             </ul>
         </section>
@@ -314,19 +312,19 @@ require __DIR__ . '/includes/header.php';
             <ul class="divide-rule">
                 <?php foreach ($recentPosts as $post): ?>
                     <li class="px-4 py-2.5">
-                        <a class="row-link text-sm" href="<?= e(topic_url((int) $post['topic_id'], (string) $post['topic_title'])) ?>#post-<?= e((string) (int) $post['id']) ?>">
+                        <a class="row-link text-sm" href="<?= e(topic_url((string) $post['topic_slug'])) ?>#post-<?= e((string) (int) $post['id']) ?>">
                             <?= e((string) $post['topic_title']) ?>
                         </a>
-                        <p class="mt-0.5 text-xs text-ink-soft"><?= e(excerpt((string) $post['body'], 130)) ?></p>
-                        <p class="mt-0.5 text-[11px] text-ink-soft"><?= e(time_ago((string) $post['created_at'])) ?></p>
+                        <p class="mt-0.5 text-xs text-soft"><?= e(excerpt((string) $post['body'], 130)) ?></p>
+                        <p class="mt-0.5 text-[11px] text-soft"><?= e(time_ago((string) $post['created_at'])) ?></p>
                     </li>
                 <?php endforeach; ?>
                 <?php if ($recentPosts === []): ?>
-                    <li class="px-4 py-6 text-center text-sm italic text-ink-soft">No posts yet.</li>
+                    <li class="px-4 py-6 text-center text-sm italic text-soft">No posts yet.</li>
                 <?php endif; ?>
             </ul>
         </section>
     </div>
 </div>
 
-<?php require __DIR__ . '/includes/footer.php'; ?>
+<?php require dirname(__DIR__) . '/includes/footer.php'; ?>
